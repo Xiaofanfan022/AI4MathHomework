@@ -7,13 +7,13 @@
 ```
 report/
 ├── main.tex              主文件：导言区、标题页、摘要、目录、正文装配
-├── build.ps1             一键编译脚本
+├── build.ps1             一键编译脚本（支持 -JobName 换输出名）
 ├── sections/
-│   ├── 01-problem.tex    第 1 节：研究问题的提出
-│   ├── 02-background.tex 第 2 节：背景与相关工作
-│   ├── 03-formulation.tex 第 3 节：问题的形式化
-│   ├── 04-openness.tex   第 4 节：问题为何未解决
-│   ├── 05-roadmap.tex    第 5 节：技术路线
+│   ├── 01-problem.tex    第 1 章：研究问题
+│   ├── 02-background.tex 第 2 章：已有工作简述
+│   ├── 03-method.tex     第 3 章：智能体设计（草稿）
+│   ├── 04-evaluation.tex 第 4 章：如何判断做得好不好（草稿）
+│   ├── 05-progress.tex   第 5 章：当前进度与后续计划
 │   └── references.tex    参考文献
 ├── texmf/                手动补装的宏包（TEXMFHOME，不提交）
 └── .texmf-var/           自建的 xelatex format（TEXMFVAR，不提交）
@@ -25,6 +25,12 @@ report/
 cd report
 .\build.ps1
 ```
+
+如果 `main.pdf` 正被阅读器打开，覆盖会失败并报
+`xdvipdfmx:fatal: Unable to open "main.pdf"`。两种办法：
+
+- 关掉阅读器后重跑；
+- 或者换输出名：`.\build.ps1 -JobName main_v2`，再手动把 `main_v2.pdf` 改名。
 
 或手动：
 
@@ -51,7 +57,13 @@ xelatex -interaction=nonstopmode main.tex   # 跑两遍
 换到其他机器（宏包齐全的 TeX Live 2025+）时，把 `build.ps1` 里的两个环境变量设置
 删掉即可，不需要 `texmf/` 与 `.texmf-var/`。
 
+## 写作约定
+
+- 这是**课程报告**，不是学术论文。目标是让同学和老师看懂，不追求形式化程度。
+- 数学符号只在必要处出现，能用自然语言说清就不用公式。
+- 第 1 章（研究问题）与第 2 章（已有工作）已定稿；第 3–5 章是设计草稿，
+  智能体实现后会大幅改写并补入实验数据。
+
 ## 当前进度
 
-已完成第 1–5 节与参考文献（问题陈述、背景、形式化、困难分析、技术路线）。
-尚未包含实验数据与结论，待智能体实现后补入第 6 节（实验）与第 7 节（讨论）。
+已完成五章与参考文献，共 15 页（正文 12 页）。尚无实验数据。

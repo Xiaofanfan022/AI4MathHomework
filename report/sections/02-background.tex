@@ -1,174 +1,43 @@
-﻿% =====================================================================
-%  第 2 节：背景与相关工作
 % =====================================================================
-\section{背景与相关工作}
+%  第 2 章  已有工作（简述）
+% =====================================================================
+
+\section{已有工作简述}
 \label{sec:background}
 
-本节交代三块背景：极值图论中“不变量不等式”这一研究对象（\S\ref{sec:bg-invariants}）、自动猜想系统的历史与现状（\S\ref{sec:bg-autoconj}）、以及本课题将要借用的统计工具（\S\ref{sec:bg-stats}）。最后给出本课题与已有工作的区别（\S\ref{sec:bg-gap}）。
+这一章只做最简要的交代，目的是说明本课题的位置，不展开技术细节。
 
-\subsection{图不变量与不变量不等式}
-\label{sec:bg-invariants}
+\subsection{自动猜想程序}
 
-\subsubsection{不变量的定义与分层}
+最早系统性地做这件事的是 Fajtlowicz 在 1980 年代开发的 Graffiti。它的做法是：建一个图数据库，为每张图算出各种不变量，然后用一套人工设计的启发式规则挑出“看起来可能成立”的不等式。据其作者统计，Graffiti 累计提出过上千条猜想，其中一部分后来被数学家证明或推翻，也有个别进入了正式论文。
 
-图不变量是“在同构下不变”的图参数。按计算复杂度，本课题关心的不变量可分为三层：
+此后有若干改进版本，比较知名的有 DeLaViña 的 Graffiti.pc、Caporossi 与 Hansen 的 AutoGraphiX，以及近年 Davila 的 TxGraffiti。它们在两个方向上做了加强：一是用线性规划代替手工规则来确定系数，二是主动去搜索反例而不只是被动检验。
 
-\begin{table}[H]
-\centering
-\caption{本课题涉及的主要图不变量。复杂度一栏指对 $n$ 个顶点的图计算该不变量的最坏情形复杂度。}
-\label{tab:invariants}
+这些系统的共同点是：\textbf{产出候选，交给人挑选}。它们能生成大量不等式，但没有一个把“如何从上千条候选里可靠地筛出少数几条”当成核心问题。
+
+\subsection{近年的大模型方法}
+
+2024 年以来，出现了把大语言模型接入数学发现流程的工作，代表性的是 DeepMind 的 FunSearch 与后续的 AlphaEvolve，以及 Charton 的 PatternBoost。它们取得了相当亮眼的成果，例如在组合构造问题上给出超越此前记录的解。
+
+但这些工作做的是\textbf{构造}，不是\textbf{猜想}：目标是找到一个具体的对象（一个集合、一个矩阵、一个程序），而不是提出一条对所有对象都成立的普遍命题。构造问题的好坏可以直接用目标函数衡量，因此不需要处理“候选太多、真假难辨”的筛选问题。
+
+本课题关注的恰恰是后者。
+
+\subsection{本课题的位置}
+
+把上面两条线放在一起，缺口就很清楚了：
+
+\begin{center}
 \small
-\begin{tabular}{@{}llll@{}}
+\begin{tabular}{@{}lll@{}}
 \toprule
-记号 & 名称 & 定义 & 复杂度 \\
+ & 是否处理“候选过多” & 是否用大模型 \\
 \midrule
-$n$ & 阶 & 顶点数 & $O(1)$ \\
-$m$ & 边数 & 边数 & $O(1)$ \\
-$\Delta$ & 最大度 & $\max_{v}\deg(v)$ & $O(n)$ \\
-$\delta$ & 最小度 & $\min_{v}\deg(v)$ & $O(n)$ \\
-$\overline{d}$ & 平均度 & $2m/n$ & $O(1)$ \\
-$\alpha$ & 独立数 & 最大独立集的大小 & NP-难 \\
-$\omega$ & 团数 & 最大团的大小 & NP-难 \\
-$\chi$ & 色数 & 最小正常染色数 & NP-难 \\
-$\nu$ & 匹配数 & 最大匹配的边数 & $O(m\sqrt{n})$ \\
-$\rho$ & 谱半径 & 邻接矩阵最大特征值 & $O(n^3)$ \\
-$\mu$ & 代数连通度 & Laplacian 第二小特征值 & $O(n^3)$ \\
-$\kappa$ & 连通度 & 顶点连通度 & $O(n^3)$ \\
-$\gamma$ & 支配数 & 最小支配集的大小 & NP-难 \\
-$W$ & Wiener 指数 & 所有点对距离之和 & $O(n^3)$ \\
+Graffiti 系列 & 否（人工挑选） & 否 \\
+FunSearch 系列 & 不适用（构造型任务） & 是 \\
+\textbf{本课题} & \textbf{是（统计筛选）} & \textbf{是} \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\textbf{NP-难的那几项构成本课题的一个真实工程约束。}要在 $n\le 9$ 的全部 274{,}668 张图上精确计算色数，逐个调用精确算法是不可行的（单张 9 点图的最坏情形已可能耗费秒级，累计超过 70 小时）。第 \ref{sec:roadmap} 节将说明我们如何处理这一约束——这本身是一个需要写进报告的工程决策。
-
-\subsubsection{不变量不等式：为什么值得研究}
-
-图不变量之间的关系是极值图论的核心议题之一。这类结果有两种典型形态。
-
-\paragraph{形态一：精确的极值定理。}
-Turán 定理给出不含 $K_{r+1}$ 的 $n$ 顶点图的最大边数；Erdős–Stone 定理将其推广到一般禁用子图。这类结果刻画了“在某个约束下某个量的极值”。
-
-\paragraph{形态二：不变量之间的不等式。}
-这是本课题的对象。典型例子：
-
-\begin{itemize}
-  \item $\chi \ge \omega$（色数不小于团数，因团内顶点两两相邻必须异色）；
-  \item $\chi \le \Delta+1$（贪心染色）；
-  \item $\alpha \ge \dfrac{n}{\Delta+1}$（最大度有界时独立集不会太小）；
-  \item $\chi+\alpha \le n+1$（\S\ref{sec:concrete} 中的式 \eqref{eq:chi-alpha}）；
-  \item $\chi \le \ceil{(\omega+\Delta+1)/2}$（Reed 猜想，未解决）。
-\end{itemize}
-
-这些不等式的共同点是：\textbf{形式简单、陈述初等、但证明可能需要深刻的想法}。Reed 猜想就是最好的例子——它的陈述只需中学词汇，却困扰了组合数学界二十余年。
-
-这种“\textbf{陈述简单、验证便宜、证明困难}”的结构，正是自动化方法可能有所作为的地方：机器擅长的是前两件事，人类擅长的是第三件。
-
-\subsubsection{为什么这类不等式适合自动搜索}
-
-自动搜索需要三个条件，极值图论的不等式恰好都满足：
-
-\begin{enumerate}[label=(\arabic*)]
-  \item \textbf{候选空间可参数化。}形如 $\sum_i c_i f_i(G)\le 0$ 的不等式，一旦确定了参与的不变量集合 $\{f_i\}$，系数 $c_i$ 就是一个有限维向量，可以用线性规划求解。
-  \item \textbf{验证成本低。}给定一张图和一个候选，验证只需计算若干不变量并做一次比较，代价是毫秒级。
-  \item \textbf{反例可搜索。}违反某条不等式的图往往具有可识别的结构（正则、临界、Mycielski 构造等），使定向搜索成为可能。
-\end{enumerate}
-
-\subsection{自动猜想系统的历史}
-\label{sec:bg-autoconj}
-
-\subsubsection{Graffiti 及其后继}
-
-Fajtlowicz 于 1980 年代中期在休斯敦大学开始开发 Graffiti。它的工作方式是：维护一个图数据库，计算每张图的若干不变量，用一套人工设计的启发式（“若某不等式在多数图上成立且不平凡，则提出它”）筛选候选，再交由图论学家评估。
-
-Graffiti 的历史意义在于\textbf{证明了自动猜想的可行性}：它提出的猜想中有若干条后来被证明，也有若干条被否证——后者同样有价值，因为反例本身揭示了不变量的结构。但它也暴露了根本问题：\textbf{产出量与消化能力严重不匹配}。据 Fajtlowicz 本人的统计，系统累计提出逾千条猜想，而其中得到数学界认真处理的只是很小一部分。
-
-Graffiti.pc（DeLaViña）调整了启发式，使产出的猜想更偏向“可能可证”；AutoGraphiX（Caporossi \& Hansen）把重心从“发现”转向“反驳”，用优化方法主动寻找反例，这实际上是本课题“反驳”环节的先驱。
-
-\subsubsection{TxGraffiti：机器学习方法的引入}
-
-Davila 的 TxGraffiti 是目前最接近本课题的系统。它的流程是：
-
-\begin{enumerate}[label=\arabic*.]
-  \item 在一个图数据集上计算不变量；
-  \item 用线性规划（或类似方法）在数据中寻找“在全部样本上成立”的线性不等式；
-  \item 对每条候选，给出使其\textbf{取等号}的图（“touch graph”）作为证据；
-  \item 人工判断哪些猜想值得证明。
-\end{enumerate}
-
-TxGraffiti 的贡献在于把“系数求解”这件事自动化了，并引入了“取等图”作为猜想的可信度证据。但它仍未解决筛选问题：\textbf{候选依然批量产出，取舍依然靠人}。
-
-\subsubsection{大语言模型进入数学：从构造到猜想}
-
-2023 年以来，大语言模型开始被用于数学发现，但主流方向与本课题不同：
-
-\begin{itemize}
-  \item \textbf{FunSearch}（Romera-Paredes 等，\emph{Nature} 2024）用 LLM 配合进化搜索，在 cap set 问题与 bin packing 上发现了优于已知的构造。它做的是\textbf{构造}（给出一个具体对象），不是\textbf{猜想}（给出一个全称命题）。
-  \item \textbf{AlphaEvolve}（DeepMind，2025）延续 FunSearch 的思路，在矩阵乘法、球填充等问题上改进已知构造。
-  \item \textbf{PatternBoost}（Charton 等，2024）用“局部搜索 + 全局 transformer”在极值图论中寻找大图，同样是构造导向。
-\end{itemize}
-
-这些工作证明了 LLM 在“搜索具体对象”上的能力，但\textbf{没有触及猜想筛选问题}——因为它们的输出是一个可以立即验证的对象，不存在“这条结论是否为偶然”的问题。本课题的对象是全称命题，恰好落在它们未覆盖的地带。
-
-\subsection{可借用的统计工具}
-\label{sec:bg-stats}
-
-\subsubsection{多重检验与假发现率}
-
-设我们同时检验 $M$ 条原假设 $H_1,\dots,H_M$，其中 $H_j$ 表示“第 $j$ 条候选存在反例”（即候选为假）。记 $R$ 为被拒绝的原假设条数（即判定为“无反例、候选成立”的条数），$V$ 为其中被错误拒绝的条数（候选实际为假，却因未搜到反例而被误判为真）。Benjamini–Hochberg 提出的\textbf{假发现率}（false discovery rate, FDR）定义为
-\begin{equation}
-  \mathrm{FDR} \;=\; \mathbb{E}\left[\frac{V}{\max(R,1)}\right].
-  \label{eq:fdr}
-\end{equation}
-BH 过程在独立性或正相依条件下可将 FDR 控制在水平 $q$：把 $M$ 个 $p$ 值排序为 $p_{(1)}\le\cdots\le p_{(M)}$，取最大的 $k$ 使 $p_{(k)}\le \frac{k}{M}q$，拒绝前 $k$ 条。
-
-\textbf{本课题的困难在于：这里没有天然的 $p$ 值。}“未找到反例”不是一个概率陈述，而是搜索预算耗尽的结果。因此需要\textbf{构造}一个可用的检验统计量——这正是课题的技术贡献之一，将在后续部分展开。
-
-\subsubsection{最优实验设计与预算分配}
-
-设共有 $M$ 条候选，总搜索预算为 $B$（例如总 CPU 时间）。把预算分配给候选 $j$ 的量为 $b_j$，$\sum_j b_j\le B$。候选 $j$ 在预算 $b_j$ 下被推翻的概率记为 $\pi_j(b_j)$，这是一个随 $b_j$ 递增的凹函数（边际收益递减）。
-
-目标可以是多种：
-\begin{itemize}
-  \item 最大化期望发现数 $\sum_j \pi_j(b_j)$（若把“推翻”视为发现）；
-  \item 最小化最终保留集合的期望假阳性数；
-  \item 在给定置信水平下最大化保留数。
-\end{itemize}
-
-由于 $\pi_j$ 未知，需要在搜索过程中学习它——这是\textbf{bandit}（多臂老虎机）的标准设定。Thompson 采样或 Beta–Bernoulli 后验是自然的选择。
-
-\subsubsection{样本分割与外推风险}
-
-“在小图上成立”向“在所有图上成立”的外推，本质上是\textbf{训练集与测试集分布不同}的问题。标准做法是样本分割：在发现集上生成候选，在独立的验证集上初筛，在更大的测试集上终检。但由于图的空间随 $n$ 指数增长，$n=9$ 与 $n=12$ 的图在结构上已有质的不同（例如 $n\le 9$ 的图无法包含某些需要更多顶点的构造），\textbf{分布偏移是系统性的而非随机的}。这构成外推的根本困难，也是本课题必须诚实面对的一点。
-
-\subsection{本课题与已有工作的区别}
-\label{sec:bg-gap}
-
-\begin{table}[H]
-\centering
-\caption{本课题与代表性自动猜想系统的比较。“筛选”一栏指是否系统性地处理“候选过多、如何取舍”的问题。}
-\label{tab:compare}
-\small
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.4cm} >{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.75cm} >{\raggedright\arraybackslash}p{1.5cm}@{}}
-\toprule
-系统 & 年代 & 猜想生成方式 & 筛选方式 & 含 LLM \\
-\midrule
-Graffiti & 1986– & 人工启发式 & 人工 & 否 \\
-Graffiti.pc & 2000s & 改进启发式 & 人工 & 否 \\
-AutoGraphiX & 2000s & 优化找反例 & 反例驱动 & 否 \\
-TxGraffiti & 2020s & 线性规划 + 机器学习 & 人工（看取等图） & 否 \\
-FunSearch & 2024 & LLM + 进化 & 不适用（构造型） & 是 \\
-AlphaEvolve & 2025 & LLM + 进化 & 不适用（构造型） & 是 \\
-\midrule
-\textbf{本课题} & 2025 & LLM 提形式 + LP 定系数 & \textbf{统计筛选+预算分配} & 是 \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-区别可归纳为三点：
-
-\begin{enumerate}[label=(\arabic*)]
-  \item \textbf{把筛选当作一等公民。}已有系统把筛选留给人；本课题把它建模为多重检验 + 预算分配问题，交由算法处理，并给出可量化的可信度。
-  \item \textbf{LLM 只负责“形式”，不负责“系数”。}LLM 提出“用哪些不变量、方向如何”，系数由线性规划在数据上求解。这样 LLM 的幻觉不会直接污染结论——一个不可行的形式会被 LP 立即判为不可行并淘汰。
-  \item \textbf{以“可审计”为目标。}整个循环写入结构化轨迹，使每一步决策可回溯。这既服务于课程对“体现迭代”的要求，也是方法本身的组成部分：没有轨迹就无法诊断假阳性的来源。
-\end{enumerate}
+需要说明的是，这个“缺口”并不是什么高深的发现。它更像是一个被忽略的工程问题：大家都忙着让系统生成更多、更好的候选，很少有人回头问一句“生成出来之后怎么办”。本课题的价值不在于提出新理论，而在于把这个问题认真对待一次，并给出可运行的实现与初步的实证。
