@@ -1,0 +1,204 @@
+% !TeX program = xelatex
+% =====================================================================
+%  人工智能与数学 —— 课程作业报告
+%  题目：CRP-Agent：面向极值图论不等式的“猜想—反驳—证明”智能体
+%
+%  编译方式：
+%      xelatex main.tex
+%      xelatex main.tex        （第二遍用于生成目录与交叉引用）
+%  或在 report/ 目录下执行： latexmk -xelatex main.tex
+% =====================================================================
+\documentclass[12pt, a4paper]{ctexart}
+
+% ------------------------- 页面与版式 -------------------------
+\usepackage{geometry}
+\geometry{left=2.6cm, right=2.6cm, top=2.7cm, bottom=2.7cm}
+
+% ------------------------- 数学 -------------------------
+\usepackage{amsmath, amssymb, amsthm, mathtools, bm}
+
+% ------------------------- 图表与排版 -------------------------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+
+% ------------------------- 绘图 -------------------------
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds, calc}
+
+% ------------------------- 强调框 -------------------------
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable}
+
+% ------------------------- 超链接（放最后） -------------------------
+\usepackage[colorlinks=true,
+            linkcolor=blue!45!black,
+            citecolor=blue!45!black,
+            urlcolor=blue!45!black,
+            bookmarksnumbered=true]{hyperref}
+
+% =====================================================================
+%  自定义
+% =====================================================================
+\definecolor{accent}{RGB}{20, 80, 140}
+\definecolor{accentlight}{RGB}{235, 243, 250}
+\definecolor{warnlight}{RGB}{252, 245, 235}
+
+% 定理类环境：共用计数器，按节编号
+\theoremstyle{definition}
+\newtheorem{definition}{定义}[section]
+\newtheorem{problem}{问题}[section]
+\newtheorem{example}{例}[section]
+\newtheorem{remark}{注}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{定理}[section]
+\newtheorem{conjecture}{猜想}[section]
+
+% 常用记号
+\newcommand{\V}{\mathcal{V}}          % 不变量集合
+\newcommand{\G}{\mathcal{G}}          % 图类
+\newcommand{\Sn}{\mathcal{S}_n}       % n 点图样本
+\newcommand{\F}{\mathcal{F}}          % 候选形式集合
+\newcommand{\C}{\mathcal{C}}          % 候选猜想集合
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\ceil}[1]{\left\lceil #1 \right\rceil}
+\newcommand{\floor}[1]{\left\lfloor #1 \right\rfloor}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% 章节标题样式
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{accent}}{\thesection}{0.8em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{accent!85!black}}{\thesubsection}{0.7em}{}
+\titlespacing*{\section}{0pt}{1.6ex plus .3ex}{1.0ex}
+\titlespacing*{\subsection}{0pt}{1.2ex plus .2ex}{0.7ex}
+
+% 页眉页脚
+\pagestyle{fancy}
+\setlength{\headheight}{24.5pt}
+\fancyhf{}
+\fancyhead[L]{\small\color{gray} 人工智能与数学 · 课程作业}
+\fancyhead[R]{\small\color{gray} CRP-Agent}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{gray!45}\leaders\hrule height \headrulewidth\hfill}}
+
+% 列表间距
+\setlist[itemize]{leftmargin=1.6em, itemsep=2pt, topsep=3pt, parsep=0pt}
+\setlist[enumerate]{leftmargin=1.8em, itemsep=2pt, topsep=3pt, parsep=0pt}
+
+% 表格行距
+\renewcommand{\arraystretch}{1.25}
+
+% 图表标题样式：小号、居中、标签后用间隔而非冒号
+\captionsetup{
+  font=small,
+  labelsep=quad,
+  justification=centering,
+  singlelinecheck=false
+}
+
+% 摘要环境（ctexart 自带 abstract，此处仅调整宽度）
+\renewenvironment{abstract}{%
+  \begin{center}\bfseries\large 摘\quad 要\end{center}
+  \begin{quote}\small
+}{%
+  \end{quote}
+}
+
+% 强调框
+\newtcolorbox{keybox}[1][]{
+  enhanced, breakable,
+  colback=accentlight, colframe=accent!60,
+  boxrule=0.6pt, arc=2pt, left=8pt, right=8pt, top=6pt, bottom=6pt,
+  fonttitle=\bfseries, title=#1
+}
+
+\newtcolorbox{notebox}[1][]{
+  enhanced, breakable,
+  colback=warnlight, colframe=orange!55!black,
+  boxrule=0.6pt, arc=2pt, left=8pt, right=8pt, top=6pt, bottom=6pt,
+  fonttitle=\bfseries, title=#1
+}
+
+% =====================================================================
+\begin{document}
+
+% ------------------------- 标题页 -------------------------
+\begin{titlepage}
+\centering
+\vspace*{2.2cm}
+
+{\color{accent}\rule{\linewidth}{1.2pt}}\\[0.5cm]
+{\Huge\bfseries CRP-Agent}\\[0.35cm]
+{\LARGE\bfseries 面向极值图论不等式的\\[0.2cm]
+“猜想—反驳—证明”智能体}\\[0.5cm]
+{\color{accent}\rule{\linewidth}{1.2pt}}
+
+\vspace{1.6cm}
+
+{\large\bfseries 课程作业报告}\\[0.3cm]
+{\large 第一部分：研究问题}\\[1.8cm]
+
+\begin{tabular}{rl}
+\toprule
+课程名称 & 人工智能与数学 \\
+报告类型 & 阶段性报告（中期） \\
+研究领域 & 组合数学 / 极值图论 · 数理统计 \\
+撰写日期 & \today \\
+\bottomrule
+\end{tabular}
+
+\vfill
+
+{\small\color{gray}
+本报告随研究推进持续修订。当前版本对应中期汇报阶段，\\[0.15cm]
+仅包含问题陈述与技术路线，尚未包含实验数据与结论。}
+
+\vspace{1.2cm}
+\end{titlepage}
+
+% ------------------------- 摘要 -------------------------
+\pagenumbering{Roman}
+\begin{abstract}
+本报告陈述一项课程作业所研究的问题：\textbf{能否构建一个智能体，使其在极值图论的不变量不等式中自主地提出猜想、搜寻反例并尝试证明，同时以统计方法控制其产出的假阳性率？}
+
+问题的出发点是一个观察：自 1980 年代 Fajtlowicz 的 Graffiti 以来，自动猜想系统已经能够批量生成图论不等式，但这类系统始终未能成为数学家的常规工具。障碍不在于“想不出猜想”，而在于\textbf{想出的猜想太多、太杂、太可能是偶然成立的}。当候选数量达到 $10^3$–$10^4$ 量级时，“哪些猜想值得投入人力去证明”本身成为一个多重检验问题，而现有系统无一系统性地处理它。
+
+本文据此把研究问题拆成三个相互耦合的子问题：\emph{猜想生成}（在开放的形式空间中提出候选）、\emph{反例搜索}（以有限算力尽可能快地推翻候选）、\emph{统计筛选}（在大量检验中控制假发现率并分配搜索预算）。报告给出问题的形式化定义、与已有工作的区别、以及一条以“猜想—反驳—证明”（Conjecture–Refute–Prove, CRP）为骨架的智能体技术路线。
+
+\vspace{0.6cm}
+\noindent\textbf{关键词：}极值图论；图不变量；自动猜想；反例搜索；多重检验；假发现率；大语言模型智能体
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% ------------------------- 正文 -------------------------
+\input{sections/01-problem}
+\input{sections/02-background}
+\input{sections/03-formulation}
+\input{sections/04-openness}
+\input{sections/05-roadmap}
+
+% ------------------------- 参考文献 -------------------------
+\newpage
+\input{sections/references}
+
+\end{document}

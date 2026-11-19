@@ -28,3 +28,23 @@ cache/
 Thumbs.db
 .vscode/
 .idea/
+
+# ---- LaTeX 中间文件 ----
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+report/sections/*.aux
+report/texmf/
+report/.texmf-var/
+
+# ---- 临时工作目录 ----
+.tmp_wheels/
+.tmp_libs/
+.tmp_render/
+.tmp_pdftext/
+.tmp_*.py
+

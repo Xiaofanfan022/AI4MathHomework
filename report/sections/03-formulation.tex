@@ -1,0 +1,253 @@
+% =====================================================================
+%  第 3 节：问题的形式化
+% =====================================================================
+\section{问题的形式化}
+\label{sec:formulation}
+
+本节把问题 \ref{prob:main} 写成可计算的形式。我们依次形式化\textbf{不变量向量}（\S\ref{sec:f-inv}）、\textbf{猜想空间}（\S\ref{sec:f-space}）、\textbf{反驳问题}（\S\ref{sec:f-refute}）、以及\textbf{筛选准则}（\S\ref{sec:f-screen}），最后给出整体目标（\S\ref{sec:f-obj}）。
+
+\subsection{不变量向量与图样本}
+\label{sec:f-inv}
+
+固定一个有限的不变量集合 $\V=\{f_1,\dots,f_d\}$，其中每个 $f_i$ 是定义在图类 $\G$ 上的实值函数，且在同构下不变。对 $G\in\G$ 记
+\begin{equation}
+  \bm{f}(G) \;=\; \bigl(f_1(G),\dots,f_d(G)\bigr)\;\in\;\R^{d}.
+  \label{eq:fvec}
+\end{equation}
+
+本课题取 $d=8$，$\V=\{\,n,\ m,\ \Delta,\ \alpha,\ \omega,\ \chi,\ \nu,\ \rho\,\}$（见表 \ref{tab:invariants}）。选择这八项的理由：前三项计算代价可忽略，后五项涵盖“组合—代数”两类视角，且它们之间的已知关系（如 $\chi\ge\omega$、$\omega\le\alpha$ 的补图对应）足够丰富，能为候选提供非平凡的约束。
+
+\begin{definition}[图样本]
+\label{def:sample}
+称有限集合 $\Sn\subset\G_n$ 为一个\emph{$n$ 阶样本}，其中 $\G_n$ 为 $n$ 个顶点的所有简单无向图在同构下的等价类集合。记
+\begin{equation}
+  \bm{F}(\Sn) \;=\; \bigl\{\bm{f}(G) : G\in\Sn\bigr\}\;\subset\;\R^{d}
+  \label{eq:sample}
+\end{equation}
+为样本的不变量矩阵（按行堆叠）。
+\end{definition}
+
+$|\G_n|$ 的增长极快：$|\G_7|=1044$，$|\G_8|=12{,}346$，$|\G_9|=274{,}668$，$|\G_{10}|=12{,}005{,}168$。因此 $n\le 9$ 可以\textbf{完全枚举}，$n\ge 10$ 必须\textbf{采样}。这一分界线是本课题实验设计的基本约束。
+
+\subsection{猜想空间}
+\label{sec:f-space}
+
+\subsubsection{线性形式}
+
+最自然的猜想形式是\textbf{线性不等式}：
+\begin{equation}
+  \bm{c}^{\top}\bm{f}(G) + c_0 \;\le\; 0 \qquad \text{对所有 } G\in\G,
+  \label{eq:linform}
+\end{equation}
+其中 $\bm{c}\in\R^{d}$ 为不变量系数、$c_0\in\R$ 为常数项。
+
+以式 \eqref{eq:chi-alpha} 为例。按 \eqref{eq:fvec} 的约定取 $\bm{f}=(n,m,\Delta,\alpha,\omega,\chi,\nu,\rho)$，则 $\chi+\alpha\le n+1$ 等价于
+\begin{equation}
+  -n + \alpha + \chi - 1 \;\le\; 0,
+  \label{eq:chi-alpha-lin}
+\end{equation}
+即 $\bm{c}=(-1,\,0,\,0,\,1,\,0,\,1,\,0,\,0)$，$c_0=-1$。
+
+\begin{remark}[为什么常数项必须显式出现]
+\label{rem:const}
+若想把 $c_0$ 并入某个不变量的系数，就需要把不等式除以该不变量，例如写成 $\bm{c}^\top\bm{f}/n + c_0/n\le 0$——这已不是线性形式。而 $n$ 在图之间是变化的，常数项无法被任何不变量的线性项吸收。
+
+因此形式空间必须含 $c_0$，否则连式 \eqref{eq:chi-alpha} 这样的基本定理都无法表达。反过来，$c_0$ 也带来了麻烦：它是唯一\textbf{不能由样本直接定出}的自由度（LP 只会把它推到可行域的边界上），所以由 LP 得到的候选往往“恰好紧贴样本”，这本身就是过拟合的一种表现。
+\end{remark}
+
+为了让猜想\textbf{可读}，需要约束 $\bm{c}$ 的取值：系数应取小整数（如 $\{-3,\dots,3\}$），且非零项数不超过 $k$（如 $k\le 4$）。否则 LP 会给出系数为 $0.00314$ 的“猜想”，人类无法理解也无从证明。
+
+\begin{definition}[候选形式]
+\label{def:form}
+一个\emph{候选形式}是一个三元组 $\varphi=(S,\sigma,k)$，其中
+\begin{itemize}
+  \item $S\subseteq\V$ 为参与的不变量集合，$|S|\le k$；
+  \item $\sigma\in\{+,-\}$ 指示不等式方向（$\le$ 或 $\ge$，后者可通过乘以 $-1$ 归一化）；
+  \item $k$ 为稀疏度上界。
+\end{itemize}
+记全体候选形式之集为 $\F$。
+\end{definition}
+
+$\F$ 的大小为 $\sum_{j\le k}\binom{d}{j}\cdot 2$，当 $d=8,k=4$ 时为 $2\cdot(8+28+56+70)=324$。这个规模是\textbf{可穷举}的，但穷举得到的候选缺乏“意图”——见 \S\ref{sec:f-llm}。
+
+\subsubsection{系数求解：一个线性规划}
+
+给定形式 $\varphi=(S,+,\cdot)$，问“是否存在系数使式 \eqref{eq:linform} 在样本 $\Sn$ 上成立”是一个线性规划可行性问题：
+\begin{equation}
+  \text{find } (\bm{c},c_0)\in\R^{|S|+1} \quad\text{s.t.}\quad
+  \bm{c}^{\top}\bm{f}_{S}(G) + c_0 \le 0 \ \ \forall G\in\Sn,
+  \label{eq:lp}
+\end{equation}
+其中 $\bm{f}_S$ 为 $\bm{f}$ 在 $S$ 上的投影。若可行域非空，还需从可行域中选一个“好”的 $(\bm{c},c_0)$——通常要求系数接近整数、范数小、非零项少。
+
+注意 \eqref{eq:lp} 是\textbf{齐次化}的：把 $c_0$ 视为增广向量 $\tilde{\bm{c}}=(\bm{c},c_0)$ 与增广特征 $\tilde{\bm{f}}=(\bm{f}_S,1)$ 的内积，则约束变为 $\tilde{\bm{c}}^\top\tilde{\bm{f}}(G)\le0$。这是标准的齐次线性可行性问题，可用线性规划或（更强的）线性可分性判据求解。
+
+\begin{remark}[平凡解的排除]
+\label{rem:trivial}
+式 \eqref{eq:lp} 总有平凡解 $\tilde{\bm{c}}=\bm{0}$。更麻烦的是\textbf{退化解}：若某不变量恒非负（如 $n\ge 1$、$\Delta\ge 0$），取 $\tilde{\bm{c}}$ 只在 $n$ 上为负、其余为 $0$ 即可得到“所有图都满足”的平凡猜想。
+
+因此必须加入\textbf{非平凡性约束}，至少三条：
+\begin{enumerate}[label=(\roman*)]
+  \item 至少两个不变量系数非零，且\textbf{符号相反}（否则不等式只是“单调性”的重述）；
+  \item 候选不能在全部样本上\textbf{取等号}（那说明它只是恒等式，不是不等式）；
+  \item 候选的\textbf{紧性}不能过松：若 $\max_G \tilde{\bm{c}}^\top\tilde{\bm{f}}(G)$ 远小于 $0$，则该不等式虽真但无信息量（例如 $\chi\le 10n$ 恒成立却无用）。
+\end{enumerate}
+第 (iii) 条给出一个可操作的过滤阈值，但阈值的选取本身需要实验确定——过严会滤掉真正的不等式（它们往往不是最紧的），过松会放进大量无用候选。
+\end{remark}
+
+\begin{remark}[为什么不让 LLM 直接给系数]
+\label{rem:llm-coef}
+让 LLM 直接输出 $\bm{c}$ 是可行的，但有两个问题：其一，LLM 的数值直觉不可靠，给出的系数往往在样本上不成立，需要反复纠正；其二，即使成立，也难以判断是“真的紧”还是“系数取得过松”。把系数交给 LP，LLM 只负责形式，可使\textbf{可行性由求解器保证}，LLM 的错误表现为“形式不可行”这一干净信号，而非难以诊断的数值错误。
+\end{remark}
+
+\subsubsection{LLM 在猜想生成中的角色}
+\label{sec:f-llm}
+
+形式空间 $\F$ 虽小（324 个），但穷举有两个缺陷：
+
+\begin{enumerate}[label=(\arabic*)]
+  \item \textbf{大量形式必然不可行。}例如 $\{\alpha,\omega\}$ 上的 $\alpha\le c\,\omega$ 在任何含 $K_3$ 且 $\alpha$ 大的图上都失败。穷举会浪费算力在这些形式上。
+  \item \textbf{穷举无法产生非线性形式。}形如 $\chi\le\ceil{(\omega+\Delta+1)/2}$ 的猜想含取整、含除法，不在 \eqref{eq:linform} 的范围内，但恰恰是这类形式最有数学意义。
+\end{enumerate}
+
+因此让 LLM 承担两件事：
+\begin{itemize}
+  \item \textbf{提议形式}：读入样本的统计摘要（各不变量的取值范围、极值图、已知定理清单），提议“值得一试”的形式，包括非线性形式；
+  \item \textbf{解释失败}：当某形式不可行或候选被反例推翻时，读入反例的结构特征，说明“为什么失败”，并据此提议修正后的形式。
+\end{itemize}
+
+第二件事是循环得以\textbf{迭代}的关键：它不是重试，而是基于失败原因的定向修正。
+
+\subsection{反驳问题}
+\label{sec:f-refute}
+
+给定候选 $(\bm{c},c_0)$，反驳即求解
+\begin{equation}
+  G^{\star} \;=\; \argmax_{G\in\G}\; \bigl(\bm{c}^{\top}\bm{f}(G)+c_0\bigr).
+  \label{eq:refute}
+\end{equation}
+若 $\bm{c}^{\top}\bm{f}(G^{\star})+c_0>0$，则 $G^{\star}$ 是反例，候选被推翻；否则候选在 $\G$ 上（就搜索所及）成立。记
+\begin{equation}
+  \mathcal{E}(\bm{c},c_0) \;=\; \max_{G\in\G}\bigl(\bm{c}^{\top}\bm{f}(G)+c_0\bigr)
+  \label{eq:excess}
+\end{equation}
+为候选的\textbf{超额量}：$\mathcal{E}>0$ 即存在反例，$\mathcal{E}\le0$ 即候选成立。
+
+问题 \eqref{eq:refute} 是\textbf{无约束的离散优化}，$\G$ 无穷（$n$ 无上界）。实际求解需做三件事：
+
+\paragraph{(a) 限定搜索域。}取 $n\le N_{\max}$（如 $N_{\max}=12$），并在 $n>9$ 时用采样代替枚举。这是必要的妥协，也是外推风险的来源。
+
+\paragraph{(b) 设计搜索策略。}不同策略覆盖不同的“反例形态”：
+\begin{itemize}
+  \item \textbf{随机搜索}：$G(n,p)$ 上的随机图，$p$ 在若干值上扫描。适合发现“典型”反例。
+  \item \textbf{结构化搜索}：正则图、二部图、Mycielski 构造（保持 $\omega$ 不变而增大 $\chi$）、Kneser 图、冠图（corona）。适合发现“极端”反例。
+  \item \textbf{局部搜索}：从当前最优图出发做边翻转（edge flip），爬山或模拟退火。适合精化。
+  \item \textbf{精确搜索}：$n\le 8$ 时直接枚举全部图。适合\textbf{确认}“小图上无反例”。
+\end{itemize}
+
+\paragraph{(c) 记录搜索的“充分性”。}若搜索未找到反例，需要说明搜索是否充分。我们记录每次搜索的\textbf{覆盖率}（枚举时的比例、采样时的样本量）与\textbf{最优违反值} $\max \bm{c}^\top\bm{f}$ 的分布。若最优值随预算增加而持续上升，说明搜索尚不充分；若趋于平台，则可初步认为无反例。
+
+\begin{remark}[“无反例”不是“成立”]
+\label{rem:no-counter}
+问题 \eqref{eq:refute} 的求解只能给出“在搜索所及的范围内无反例”。这在逻辑上是弱结论，但在实践中是有信息量的：若在 $n\le 12$ 的数百万张图上、用四种策略搜索均未找到反例，则该候选至少\textbf{值得进一步研究}。本课题不声称能证明猜想，只声称能\textbf{排序}猜想。
+\end{remark}
+
+\subsection{统计筛选}
+\label{sec:f-screen}
+
+这是本课题的核心。设有 $M$ 条候选 $\mathcal{C}=\{c_1,\dots,c_M\}$，每条经若干轮反驳搜索后仍存活。问题是：\textbf{保留哪些？}
+
+\subsubsection{困难：没有天然的 $p$ 值}
+
+标准多重检验要求每条假设有一个在 $H_0$ 下服从已知分布的检验统计量。这里没有：
+\begin{itemize}
+  \item “未找到反例”是\textbf{确定性}结果，不含随机性；
+  \item 但“未找到”依赖搜索预算，预算不同则结论强度不同；
+  \item 且候选之间\textbf{相关}（共享不变量、共享样本），破坏独立性假设。
+\end{itemize}
+
+\subsubsection{方案：以“留出集上的违反裕度”为统计量}
+
+我们构造如下统计量。把图样本分为三部分：
+\begin{itemize}
+  \item \textbf{发现集} $\mathcal{D}$：用于生成候选（$n\le 9$ 的枚举图）；
+  \item \textbf{验证集} $\mathcal{V}$：用于初筛（$n=10,11$ 的采样图）；
+  \item \textbf{测试集} $\mathcal{T}$：用于终检（$n=12$ 以上的采样图，含结构化图）。
+\end{itemize}
+
+对候选 $(\bm{c}_j,c_{0j})$ 定义其\textbf{违反裕度}
+\begin{equation}
+  T_j \;=\; \max_{G\in\mathcal{V}}\; \bigl(\bm{c}_j^{\top}\bm{f}(G)+c_{0j}\bigr),
+  \label{eq:margin}
+\end{equation}
+即候选在验证集上的最大超额量。$T_j\le 0$ 表示在验证集上成立；$T_j$ 越接近 $0$，候选越“紧”，越可能在大图上被推翻。
+
+\textbf{$T_j$ 的零分布可通过置换构造。}具体做法：保持 $\bm{c}_j$ 的\textbf{稀疏模式}（哪些不变量非零、各自符号）不变，在发现集上把不变量矩阵的各列随机置换（打破不变量之间的真实关联而保持各自的边缘分布），重新求解 LP \eqref{eq:lp} 得到 $\tilde{\bm{c}}_j,\tilde{c}_{0j}$，再在验证集上算出 $\tilde{T}_j$。重复 $B$ 次得到 $\{T_j^{(1)},\dots,T_j^{(B)}\}$，据此给出单侧 $p$ 值
+\begin{equation}
+  p_j \;=\; \frac{1+\#\{b: \tilde{T}_j^{(b)} \le T_j\}}{B+1}.
+  \label{eq:pval}
+\end{equation}
+
+\begin{remark}[$p$ 值的方向]
+\label{rem:pdir}
+这里检验的原假设 $H_j$ 是“候选 $j$ 为假（存在反例）”。$p$ 值小意味着 $T_j$ 显著\textbf{低于}零分布——即候选在验证集上比“随机结构”更紧地成立，证据\textbf{反对} $H_j$，故拒绝 $H_j$、保留候选。若把不等号方向写反，$p$ 值会在候选\textbf{明显为假}时变小，BH 就会优先保留最可疑的候选——这是一个容易犯且不易察觉的错误。
+\end{remark}
+
+\begin{notebox}[这个构造是启发式的，需要验证]
+置换检验的有效性依赖于“置换下的零分布确实对应 $H_0$”。在不变量数据上，这一点的严格性并不显然：不变量之间存在确定性关系（如 $\omega\le\chi\le\Delta+1$），随机置换列会破坏这些关系，产生的“伪图”不变量组合可能不对应任何真实图，使零分布偏离。
+
+因此该方案\textbf{必须在实验中校准}：用已知定理（应当保留）检验其\textbf{功效}，用随机生成的无意义候选（不应当保留）检验其\textbf{水平}。若校准显示零分布明显偏离，备选方案是不做置换、改用“在不同 $n$ 的子样本间重采样”构造零分布。这是本课题的一个待验证环节。
+\end{notebox}
+
+\subsubsection{筛选规则}
+
+有了 $p_j$，即可应用 BH 过程：
+\begin{equation}
+  k^{\star} = \max\left\{k : p_{(k)} \le \frac{k}{M}\,q\right\},
+  \qquad \text{保留前 } k^{\star} \text{ 条}.
+  \label{eq:bh}
+\end{equation}
+其中 $q$ 为目标 FDR 水平（如 $q=0.05$）。
+
+但直接套用 BH 有两个问题，需要额外处理：
+\begin{itemize}
+  \item \textbf{相关性}：BH 在正相依下仍成立（Benjamini–Yekutieli 条件下），但不变量数据的相关性结构未知。我们计划用\textbf{BY 校正}（除以调和级数）作为保守版本，并报告两种结果。
+  \item \textbf{预算不均}：不同候选的搜索预算不同，$p$ 值的可比性受影响。这引出下一小节。
+\end{itemize}
+
+\subsubsection{预算分配}
+
+总预算 $B$ 需在 $M$ 条候选间分配。设候选 $j$ 在预算 $b$ 下被推翻的概率为 $\pi_j(b)$，未知且随 $b$ 递增。我们用\textbf{Beta–Bernoulli 汤普森采样}在线学习：
+
+\begin{enumerate}[label=\arabic*.]
+  \item 对每条候选维护后验 $\mathrm{Beta}(a_j,b_j)$，初值 $(1,1)$；
+  \item 每轮按后验采样 $\theta_j\sim\mathrm{Beta}(a_j,b_j)$，把下一单位预算给 $\theta_j$ 最大的候选；
+  \item 执行搜索，若推翻则记成功（$a_j\mathrel{+}=1$），否则记失败（$b_j\mathrel{+}=1$）；
+  \item 重复至预算耗尽。
+\end{enumerate}
+
+这样做的效果是：可疑的候选获得更多预算，已被反复搜索仍无果的候选预算递减。\textbf{但这也引入偏差}——被少搜的候选，其“未找到反例”的证据更弱。因此预算分配与 $p$ 值计算必须联合设计：我们计划\textbf{按预算分层}计算 $p$ 值，或在最终筛选中对低预算候选施加惩罚。
+
+\subsection{整体目标}
+\label{sec:f-obj}
+
+综合以上，本课题要优化的整体目标是：
+
+\begin{keybox}[形式化目标]
+给定不变量集合 $\V$、图样本 $\Sn$、总预算 $B$、目标 FDR 水平 $q$，求一个策略 $\pi$（由 LLM 提议形式、LP 定系数、搜索找反例、统计筛选四部分构成），使得在预算 $B$ 内：
+\begin{equation}
+  \max_{\pi}\; \mathbb{E}\bigl[\,|\mathcal{C}_{\text{retained}}|\,\bigr]
+  \quad\text{s.t.}\quad
+  \mathrm{FDR}\bigl(\mathcal{C}_{\text{retained}}\bigr)\le q,
+  \label{eq:objective}
+\end{equation}
+其中 $\mathcal{C}_{\text{retained}}$ 为最终保留的猜想集合，FDR 按式 \eqref{eq:fdr} 定义，“假”指“存在反例”。
+\end{keybox}
+
+这个目标有三层含义，值得分开说明：
+
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{它是一个权衡，不是一个极大化。}提高保留数会推高 FDR，反之亦然。策略的优劣体现在\textbf{帕累托前沿}上：在给定 $q$ 下能保留多少条。
+  \item \textbf{它可被部分评估。}虽然“是否真的成立”无法完全判定，但可以用\textbf{已知定理}（真阳性）与\textbf{已知反例}（真阴性）构造一个有标签的子集，在该子集上评估策略的召回与精确率。这是可行的验证路径。
+  \item \textbf{它的价值在于过程。}即使最终保留数为零（所有候选都被推翻或无法通过筛选），循环中产生的反例、失败模式、以及“为什么筛不出来”的诊断，本身就是对问题 \ref{prob:main} 的回答。
+\end{enumerate}
