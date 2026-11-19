@@ -48,3 +48,6 @@ report/.texmf-var/
 .tmp_pdftext/
 .tmp_*.py
 
+
+# ---- 用户的 LaTeX 练习草稿（GBK 编码，不入库）----
+LatexTest/
