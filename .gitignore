@@ -40,6 +40,7 @@ report/*.synctex.gz
 report/sections/*.aux
 report/texmf/
 report/.texmf-var/
+report/main_v*.pdf
 
 # ---- 临时工作目录 ----
 .tmp_wheels/
@@ -48,9 +49,5 @@ report/.texmf-var/
 .tmp_pdftext/
 .tmp_*.py
 
-
-# ---- �û��� LaTeX ��ϰ�ݸ壨GBK ���룬����⣩----
+# ---- 用户的 LaTeX 练习草稿（GBK 编码，不入库）----
 LatexTest/
-
-# ---- 编译中间产物（只保留 main.pdf）----
-report/main_v*.pdf
