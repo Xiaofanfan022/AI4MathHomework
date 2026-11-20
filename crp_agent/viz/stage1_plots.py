@@ -62,7 +62,6 @@ def fig_distributions(df: pd.DataFrame) -> None:
     axes[-1].axis("off")
     handles, labels = axes[0].get_legend_handles_labels()
     axes[-1].legend(handles, labels, ncol=2, frameon=False, loc="center")
-    fig.suptitle("各不变量在数据集中的分布（纵轴为同阶图内的比例）", y=0.99)
     fig.tight_layout()
     save(fig, FIG_DIR / "fig01_invariant_dist.png")
 
@@ -101,7 +100,6 @@ def fig_reed_scatter(df: pd.DataFrame) -> None:
     ax.set_ylim(-0.5, lim - 0.5)
     ax.set_xlabel(r"团数 $\omega$")
     ax.set_ylabel(r"色数 $\chi$")
-    ax.set_title("色数与团数的联合分布（对数色阶）")
     ax.legend(frameon=False, loc="upper left")
     ax.grid(False)
     fig.colorbar(im, ax=ax, fraction=0.046, label="图数")
@@ -136,7 +134,6 @@ def fig_correlation(df: pd.DataFrame) -> None:
             v = corr.values[i, j]
             ax.text(j, i, f"{v:.2f}", ha="center", va="center",
                     fontsize=7, color="white" if abs(v) > 0.6 else "black")
-    ax.set_title("不变量之间的 Spearman 相关系数")
     ax.grid(False)
     fig.colorbar(im, ax=ax, fraction=0.046, label="相关系数")
     fig.tight_layout()
@@ -169,7 +166,6 @@ def fig_equality_ratio(df: pd.DataFrame) -> None:
                 label=label, lw=1.6, ms=4.5)
     ax.set_xlabel("阶数 n")
     ax.set_ylabel("取等的图所占比例（%）")
-    ax.set_title("已知结论的取等比例随阶数的变化")
     ax.set_xticks(sorted(d["n"].unique()))
     ax.legend(frameon=False)
     fig.tight_layout()
@@ -217,7 +213,6 @@ def fig_sample_graphs(df: pd.DataFrame) -> None:
         ax.text(0.5, -0.02, info, transform=ax.transAxes,
                 ha="center", va="top", fontsize=8, color="#333333")
 
-    fig.suptitle("数据集中的典型图及其不变量", y=0.99)
     fig.tight_layout()
     save(fig, FIG_DIR / "fig05_sample_graphs.png")
 

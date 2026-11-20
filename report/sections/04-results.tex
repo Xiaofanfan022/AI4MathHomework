@@ -1,0 +1,178 @@
+% =====================================================================
+%  第 4 章  阶段结果
+% =====================================================================
+
+\section{阶段结果}
+\label{sec:results}
+
+本章报告已经完成的两组实验。第一组不涉及大语言模型，
+用于确认数据、线性规划与统计筛选三部分各自正确；
+第二组比较反例搜索策略的实际效果。
+智能体主循环已实现并通过演练模式检查，但尚未接入模型运行，
+相关结果待补。
+
+\subsection{数据的整体面貌}
+
+数据集共 27810 张图。图\ref{fig:dist} 给出五个不变量在各阶内部的分布比例。
+随阶数增大，色数与团数的分布逐渐分开，独立数向中段集中。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{fig01_invariant_dist.png}
+\caption{各不变量在每一阶内部的分布比例}
+\label{fig:dist}
+\end{figure}
+
+图\ref{fig:corr} 给出九个不变量两两之间的秩相关系数。
+色数与团数的相关系数为 0.97，边数与谱半径为 0.96，
+独立数与边数为 $-0.43$。前两者说明这些量高度冗余，
+后者说明独立数与图的稠密程度反向相关。
+这一观察直接决定了候选形式的选择范围：
+若两个量几乎完全相关，则同时使用二者不提供额外信息。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{fig03_corr_heatmap.png}
+\caption{不变量两两之间的秩相关系数}
+\label{fig:corr}
+\end{figure}
+
+\subsection{线性规划能否复现已知结论}
+
+线性规划的正确性由一项检验确认：给定已知结论所对应的形式，
+规划求出的系数应当复现该结论。
+
+图\ref{fig:recovery} 给出五条已知结论在 $n \leq 8$ 的全部 13598 张图上的取等比例。
+五条均被正确复现，其中 $\chi \leq \omega+1$ 与 Reed 型不等式各在 4.3\% 的图上取等，
+$\chi \leq n - \alpha + 1$ 与 $\alpha \leq n - \omega + 1$ 各在 3.1\% 的图上取等，
+$\chi \leq \Delta + 1$ 的取等比例最低，为 0.7\%。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{fig06_lp_recovery.png}
+\caption{五条已知结论在数据上的取等比例}
+\label{fig:recovery}
+\end{figure}
+
+取等比例随阶数下降。在三阶图上，三条结论的取等比例均为 100\%；
+到八阶时降至 1\% 至 2\%。这说明取等只在少数结构特殊的图上发生，
+大多数图上的不等式是严格成立的。
+这一点对后续的统计筛选有直接影响：取等比例本身就很低，
+故不能以“取等比例高”作为候选有效的唯一依据，
+还需与零分布比较。
+
+\subsection{小阶成立不蕴含普遍成立}
+
+图\ref{fig:boundary} 给出一个值得单独说明的现象。
+不等式 $\chi \leq \omega + 1$ 在 $n \leq 8$ 的全部 13598 张图上成立，
+在 $n = 9$ 与 $n = 10$ 的采样图上亦成立，
+却在 $n = 11$ 上失效。反例是 Grötzsch 图：
+11 个顶点、20 条边、团数为 2、色数为 4。
+该图不含三角形，故团数仅为 2，但需要四种颜色。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{fig09_boundary.png}
+\caption{$\chi \leq \omega+1$ 在每一阶上的最大超出量}
+\label{fig:boundary}
+\end{figure}
+
+这一现象是本课题核心判断的直接证据。
+若仅在小规模图上验证，$\chi \leq \omega+1$ 看起来是一条可靠的规律，
+甚至可能被当作新发现报告；但它并不普遍成立。
+因此系统必须把“在数据上成立”与“成立”严格区分，
+而统计筛选正是为此设置的。
+
+值得注意的是，该反例由结构化族在预算 45 内找到，
+而随机图搜索在同一预算下几乎无法命中。
+这为“搜索策略需要判断”提供了实测依据。
+
+\subsection{反例搜索策略的比较}
+
+对五条候选，各用三类策略作八次独立搜索，每次预算 2000 张图。
+结果如表\ref{tab:strategy} 所示。
+
+\begin{table}[H]
+\centering
+\small
+\caption{三类搜索策略的命中情况（成功次数 / 8）}
+\label{tab:strategy}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+候选 & 随机图 & 结构化族 & 局部修改 \\
+\midrule
+$\chi \leq \Delta$ & 8（中位 6） & 8（中位 2） & 0 \\
+$\chi \leq \omega + 1$ & 1（中位 1204） & 8（中位 54） & 0 \\
+$\alpha + \omega \leq n$ & 8（中位 2） & 8（中位 2） & 0 \\
+$\chi \leq \frac{1}{2}(\omega+\Delta) + 1$ & 0 & 0 & 0 \\
+$\chi \leq \rho + 1$ & 0 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+三点结论。其一，结构化族全面不劣于随机图，
+在 $\chi \leq \omega+1$ 上优势明显：结构化族八次全部命中，中位预算 54；
+随机图仅命中一次，中位预算 1204。其二，局部修改完全无效，
+因为反例与取等图的结构相距过远，局部修改无法到达。其三，
+后两条候选在三种策略下均未找到反例。
+
+第三点不能简单理解为“这两条候选成立”。
+它只说明在给定预算与给定策略下未找到反例。
+$\chi \leq \frac{1}{2}(\omega+\Delta)+1$ 恰是 Reed 猜想的松弛形式，
+而 Reed 猜想自 1998 年提出至今未解决，
+若本系统能在数秒内将其推翻，反倒说明实现有误。
+这一结果与理论预期一致，可作为系统未产生荒谬结论的旁证。
+
+图\ref{fig:refute} 以中位预算为横轴展示了同样的结果。
+未命中的组合在图中不出现。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{fig07_refute_curve.png}
+\caption{三类策略命中反例所需的中位预算}
+\label{fig:refute}
+\end{figure}
+
+\subsection{统计筛选的效果}
+
+在不调用模型的基线上，完整跑通生成与筛选两步。
+目标不变量取色数，形式空间限定为至多两个预测子，
+共 128 种形式。流程与各级淘汰数如图\ref{fig:funnel} 所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\linewidth]{fig10_funnel.png}
+\caption{候选的逐级淘汰}
+\label{fig:funnel}
+\end{figure}
+
+128 种形式中，52 种求得了非平凡解，其余因形式过弱而退化为平凡不等式。
+去重后剩 17 条。经 200 次置换检验并作 BH 校正（$q = 0.1$）后保留 7 条。
+最后在从未参与拟合与筛选的测试集上复核，7 条中有 6 条仍然成立。
+
+保留的六条中有四条是已知结论的复现：
+$\chi \leq \omega+1$、$\chi \leq n-\alpha+1$、$\chi \leq \rho+1$、$\chi \leq \Delta+1$。
+另外两条为带小数的组合形式，例如
+$\chi \leq 0.4\,\delta + 0.6\,\nu + 4.2$。
+这类形式的取等比例极低（0.06\%），
+其数学意义尚待判断，不宜径直称为新发现。
+
+唯一未通过测试集复核的是 $\chi \leq 0.667\,\Delta + 0.125\,\delta + 2.67$。
+该式在发现集与验证集上均成立，在测试集上失效，
+说明它是一条过拟合的产物。这一条恰好说明测试集的设置是必要的：
+若只作发现集与验证集的两分，该式会被当作有效候选保留下来。
+
+图\ref{fig:pvalue} 给出 17 条候选的 $p$ 值分布与 BH 过程。
+被保留的 7 条 $p$ 值均为 0.005，即 200 次置换中零分布从未达到观测值，
+这是 $B=200$ 时 $p$ 值可能取到的最小值。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{fig08_pvalue_hist.png}
+\caption{候选的 $p$ 值分布与 BH 校正过程}
+\label{fig:pvalue}
+\end{figure}
+
+需要说明本节的局限。基线使用的是形式枚举而非模型提议，
+因此它衡量的是“确定性骨架”的能力，而非智能体的能力。
+模型接入后的对比结果待补。

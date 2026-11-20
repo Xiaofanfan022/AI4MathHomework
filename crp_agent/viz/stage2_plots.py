@@ -64,7 +64,6 @@ def fig_lp_recovery(df: pd.DataFrame, out: Path) -> None:
         ax.text(r + max(ratios) * 0.025, yi, f"{r*100:.1f}%",
                 va="center", fontsize=9, color=GRAY)
     ax.grid(axis="x", alpha=0.3)
-    ax.set_title("已知结论在数据上的紧度")
     save(fig, out)
 
 
@@ -126,7 +125,6 @@ def fig_refute_curve(out: Path) -> None:
     ax.set_ylim(len(candidates) * 4 - 0.3, -1.4)
     ax.set_xlabel("找到反例时已评估的图数（中位数，对数尺度）")
     ax.grid(axis="x", alpha=0.3)
-    ax.set_title("反例搜索：策略决定代价")
     save(fig, out)
 
 
@@ -221,7 +219,6 @@ def fig_boundary(df: pd.DataFrame, out: Path) -> None:
     ax.set_xlim(0.4, ns.max() + 0.6)
     ax.set_xticks(ns)
     ax.grid(axis="y", alpha=0.3)
-    ax.set_title(r"$\chi \leq \omega+1$ 在每一阶上的最大超出量")
 
     # ---- 右：反例
     ax = axes[1]
@@ -306,7 +303,6 @@ def fig_form_funnel(D: pd.DataFrame, V: pd.DataFrame, T: pd.DataFrame,
 
     ax.set_xlabel("候选数（对数尺度）")
     ax.grid(axis="x", alpha=0.3)
-    ax.set_title("候选的逐级淘汰")
     save(fig, out)
 
 
