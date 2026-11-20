@@ -48,6 +48,11 @@ report/main_v*.pdf
 .tmp_render/
 .tmp_pdftext/
 .tmp_*.py
+.tmp_*.png
+.tmp_*.log
+
+# ---- 渲染预览（office 技能生成的临时目录）----
+.dsh-office-*/
 
 # ---- 用户的 LaTeX 练习草稿（GBK 编码，不入库）----
 LatexTest/
