@@ -5,12 +5,12 @@
 fig06_lp_recovery.png        LP 能否重新发现已知结论
 fig07_refute_curve.png       反例搜索：策略与预算的效果
 fig08_pvalue_hist.png        p 值分布与 BH 保留结果
-fig09_tight_vs_holdout.png   取等比例与测试集表现
-fig10_form_space.png         形式复杂度与过拟合
+fig09_boundary.png           小阶成立不等于普遍成立
+fig10_funnel.png             候选的逐级淘汰
 
 数据来源
 --------
-图 6、7、10 现场计算；图 8、9 读取最近一次运行的结果文件。
+图 6、7、9、10 现场计算；图 8 读取最近一次运行的结果文件。
 """
 
 from __future__ import annotations
