@@ -126,6 +126,45 @@ def _structured_graphs(n_lo: int, n_hi: int, count: int, rng: random.Random):
         yield G.number_of_nodes(), sorted(tuple(sorted(e)) for e in G.edges())
 
 
+def tight_seed_graphs(df, sol, k: int = 60, tol: float = 1e-6):
+    """从验证集中取出使该不等式取等的图，作为局部搜索的起点。
+
+    局部搜索的思路是"反例应当与取等图相距不远"，因此种子必须来自
+    取等图而非随机图。若一条不等式在验证集上没有取等图，局部搜索
+    就没有起点，此时返回空列表。
+    """
+    import numpy as np
+
+    from .forms import _design_matrix
+
+    A = _design_matrix(df, sol.form)
+    a = np.array([sol.signed_coefs()[p] for p in sol.form.predictors])
+    vals = A @ a + sol.intercept - df[sol.form.target].to_numpy(dtype=float)
+    if sol.form.direction == "le":
+        slack = vals
+    else:
+        slack = -vals
+
+    idx = np.where(np.abs(slack) <= tol)[0]
+    if len(idx) == 0:
+        return []
+    if len(idx) > k:
+        idx = np.random.default_rng(0).choice(idx, size=k, replace=False)
+
+    out = []
+    for i in idx:
+        row = df.iloc[int(i)]
+        n = int(row["n"])
+        raw = str(row["edges"])
+        edges = []
+        if raw and raw != "nan":
+            for part in raw.split(";"):
+                u, v = part.split("-")
+                edges.append((int(u), int(v)))
+        out.append((n, sorted(edges)))
+    return out
+
+
 def _local_graphs(seed_graphs, count: int, rng: random.Random):
     """对取等的图作局部修改：加一条边、删一条边、或加一个点。"""
     seeds = list(seed_graphs)

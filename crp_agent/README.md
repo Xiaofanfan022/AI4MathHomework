@@ -10,6 +10,7 @@ crp_agent/
   build_dataset.py     构造图数据集（完全枚举 + 采样 + 结构化族）
   validate_dataset.py  用已知结论检验数据集与不变量计算的正确性
   run_baseline.py      阶段二基线：形式搜索 + 系数求解 + 统计筛选（不调用模型）
+  ablation.py          消融实验：模型提议与随机提议的对照（需要 API Key）
   core/
     invariants.py      九个不变量的精确算法（位掩码实现）
     graphgen.py        图的枚举与采样
@@ -17,6 +18,7 @@ crp_agent/
     counterexample.py  反例搜索（随机 / 结构化 / 局部修改）
     stats.py           置换检验与 BH 多重检验校正
     split.py           发现集 / 验证集 / 测试集的划分
+    informativeness.py 恒真式识别：候选是否被定义或已知界直接支配
   agent/
     llm.py             模型客户端（兼容 OpenAI 接口）
     prompts.py         四处调用的提示词
@@ -26,6 +28,7 @@ crp_agent/
     style.py           绘图样式与中文字体
     stage1_plots.py    阶段一图表（数据与已知结论）
     stage2_plots.py    阶段二图表（搜索与筛选）
+    stage3_plots.py    阶段三图表（智能体轨迹与消融）
   data/                数据集 CSV
   figures/             图表 PNG
   runs/                每次运行的轨迹与结果
@@ -50,7 +53,13 @@ python -m crp_agent.run_baseline --max-pred 2 --top-k 80 --min-tight 0.0002
 python -m crp_agent.viz.stage2_plots
 
 # 6. 智能体（需要 API Key）
-python -m crp_agent.agent --rounds 3
+python -m crp_agent.agent --rounds 5
+
+# 7. 消融实验：模型提议 vs 随机提议（需要 API Key）
+python -m crp_agent.ablation --seeds 3 --rounds 4
+
+# 8. 阶段三图表
+python -m crp_agent.viz.stage3_plots
 ```
 
 ## 配置 API Key
@@ -81,6 +90,13 @@ MODEL_NAME=...            # 例如 coding-glm-5.1-free
 
 **假阳性要控制。** 同时检验上百条候选时，总有一些仅因偶然在数据上成立。
 系统用置换检验给出 p 值，再用 Benjamini-Hochberg 控制错误发现率。
+
+**恒真式要先剔除。** 不变量之间存在由定义直接给出的序关系
+（例如 $\omega \leq \chi$、$\delta \leq \Delta$）。这类形式在任何图上都成立，
+必然通过置换检验，却没有信息量。若不加区分，随机抽样反而会"胜出"——
+消融实验中随机组一度全面超过模型组，原因正是如此。
+`core/informativeness.py` 用 32 条基本事实识别被支配的候选，
+智能体把它们连同理由一起反馈给模型，要求换方向。
 
 ## 已知结论
 

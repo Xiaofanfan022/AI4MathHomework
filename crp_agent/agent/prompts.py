@@ -34,7 +34,11 @@ SYSTEM_PROPOSE = """\
 - 线性组合只能使用给出的不变量，每个量带 +1 或 -1 的符号。
 - 系数不由你给出，系统会用线性规划求解，你只决定"用哪些量、什么方向"。
 - 最多使用 3 个预测子。超过 3 个的形式在有限数据上几乎必然过拟合。
-- 不要提出平凡形式：例如只用 n 作预测子去界 n 本身，或只用一个量界它自己。
+- 目标不变量可以是九个量中的任意一个，不要全部集中在 chi 上。
+  在八条形式里，至少三条的目标不应是 chi。
+- 不要提出平凡形式：例如只用 n 作预测子去界 n 本身，或只用一个量界它自己，
+  也不要提 "alpha <= n"、"chi <= Delta + 1"、"omega <= chi" 这类由定义
+  或最粗的计数就立即成立的界。
 - 优先考虑你判断在图论中有结构性意义的组合，而不是随机拼凑。
 
 输出格式：严格的 JSON，形如
@@ -95,7 +99,8 @@ SYSTEM_STRATEGY = """\
 
 def propose_user_prompt(summary: dict, known: list[str],
                         tried: list[str], n_round: int,
-                        exhausted: list[str] | None = None) -> str:
+                        exhausted: list[str] | None = None,
+                        trivial: list[str] | None = None) -> str:
     """构造"提出形式"的用户消息。
 
     known     已经确认成立的结论（不要重复提出）
@@ -103,6 +108,9 @@ def propose_user_prompt(summary: dict, known: list[str],
     exhausted 此前各轮已经处理过、无论存活的全部形式。只给 tried
               会让模型反复提出同一批"未被推翻"的形式，导致后续轮次
               没有新内容可评估。
+    trivial   被判为无信息量的形式（由定义直接给出的恒真式）。
+              这些形式统计上必然通过检验，但没有内容，须单独列出，
+              否则模型会不断提出同一批恒真式。
     """
     lines = [
         f"这是第 {n_round} 轮。",
@@ -122,12 +130,28 @@ def propose_user_prompt(summary: dict, known: list[str],
     for k, (lo, hi) in summary["ranges"].items():
         lines.append(f"  {k:6s} [{lo}, {hi}]")
 
+    pairs = summary.get("top_correlated_pairs") or []
+    if pairs:
+        lines += ["", "相关性最强的若干不变量对（Spearman）："]
+        for p in pairs:
+            lines.append(f"  {p['a']:6s} ~ {p['b']:6s} {p['rho']:+.3f}")
+        lines += ["",
+                  "注意：上表只是相关结构，不代表因果关系。目标不变量不必"
+                  "是 chi，你可以对任何一个不变量提出上界或下界。"]
+
     lines += ["", "## 已确认成立的结论（不要重复提出）"]
     lines += [f"  - {s}" for s in known] or ["  （暂无）"]
 
     if tried:
         lines += ["", "## 已尝试且被反例推翻的形式（不要重复）"]
         lines += [f"  - {s}" for s in tried[-12:]]
+
+    if trivial:
+        lines += ["", "## 以下形式由定义直接成立，没有信息量（不要再提）"]
+        lines += [f"  - {s}" for s in trivial[-12:]]
+        lines += ["",
+                  "这些形式在任何图上都成立，检验它们不会产生新知识。"
+                  "请提出需要实质论证才能成立的组合。"]
 
     if exhausted:
         lines += ["", "## 此前各轮已经检验过的形式（不要重复，请换方向）"]
