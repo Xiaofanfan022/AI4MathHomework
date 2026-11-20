@@ -5,8 +5,8 @@
 %
 %  编译方式：
 %      xelatex main.tex
-%      xelatex main.tex        （第二遍用于生成目录与交叉引用）
-%  或在 report/ 目录下执行： latexmk -xelatex main.tex
+%      xelatex main.tex        （第二遍用于解析交叉引用）
+%  或在 report/ 目录下执行： .\build.ps1
 % =====================================================================
 \documentclass[12pt, a4paper]{ctexart}
 
@@ -22,11 +22,14 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{tabularx}
+\usepackage{array}
 \usepackage{float}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{caption}
 \usepackage{titlesec}
+% 标题之后的第一个段落同样缩进两字（titlesec 默认取消该缩进）
+\usepackage{indentfirst}
 \usepackage{fancyhdr}
 \usepackage{microtype}
 
@@ -52,6 +55,12 @@
 \definecolor{accentlight}{RGB}{235, 243, 250}
 \definecolor{warnlight}{RGB}{252, 245, 235}
 
+% 段首缩进：中文排版惯例为两个汉字宽度
+\setlength{\parindent}{2em}
+\makeatletter
+\let\@afterindentfalse\@afterindenttrue
+\makeatother
+
 % 定理类环境：共用计数器，按节编号
 \theoremstyle{definition}
 \newtheorem{definition}{定义}[section]
@@ -60,6 +69,7 @@
 \newtheorem{remark}{注}[section]
 
 \theoremstyle{plain}
+\newtheorem{proposition}{命题}[section]
 \newtheorem{theorem}{定理}[section]
 \newtheorem{conjecture}{猜想}[section]
 
@@ -69,7 +79,6 @@
 \newcommand{\Sn}{\mathcal{S}_n}       % n 点图样本
 \newcommand{\F}{\mathcal{F}}          % 候选形式集合
 \newcommand{\C}{\mathcal{C}}          % 候选猜想集合
-\newcommand{\dd}{\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\N}{\mathbb{N}}
 \newcommand{\ceil}[1]{\left\lceil #1 \right\rceil}
@@ -82,8 +91,8 @@
   {\normalfont\Large\bfseries\color{accent}}{\thesection}{0.8em}{}
 \titleformat{\subsection}
   {\normalfont\large\bfseries\color{accent!85!black}}{\thesubsection}{0.7em}{}
-\titlespacing*{\section}{0pt}{1.6ex plus .3ex}{1.0ex}
-\titlespacing*{\subsection}{0pt}{1.2ex plus .2ex}{0.7ex}
+\titlespacing*{\section}{0pt}{1.8ex plus .3ex}{1.0ex}
+\titlespacing*{\subsection}{0pt}{1.4ex plus .2ex}{0.8ex}
 
 % 页眉页脚
 \pagestyle{fancy}
@@ -102,20 +111,12 @@
 % 表格行距
 \renewcommand{\arraystretch}{1.25}
 
-% 图表标题样式：小号、居中、标签后用间隔而非冒号
+% 图表标题样式
 \captionsetup{
   font=small,
   labelsep=quad,
   justification=centering,
   singlelinecheck=false
-}
-
-% 摘要环境（ctexart 自带 abstract，此处仅调整宽度）
-\renewenvironment{abstract}{%
-  \begin{center}\bfseries\large 摘\quad 要\end{center}
-  \begin{quote}\small
-}{%
-  \end{quote}
 }
 
 % 强调框
@@ -133,70 +134,18 @@
   fonttitle=\bfseries, title=#1
 }
 
-% 不允许跨页断开的短提示框（用于必须整块呈现的段落）
-\newtcolorbox{noteboxtight}[1][]{
-  enhanced,
-  colback=warnlight, colframe=orange!55!black,
-  boxrule=0.6pt, arc=2pt, left=8pt, right=8pt, top=6pt, bottom=6pt,
-  fonttitle=\bfseries, title=#1
-}
-
 % =====================================================================
 \begin{document}
 
-% ------------------------- 标题页 -------------------------
-\begin{titlepage}
-\centering
-\vspace*{2.2cm}
-
-{\color{accent}\rule{\linewidth}{1.2pt}}\\[0.5cm]
-{\Huge\bfseries CRP-Agent}\\[0.35cm]
-{\LARGE\bfseries 面向极值图论不等式的\\[0.2cm]
-“猜想—反驳—证明”智能体}\\[0.5cm]
-{\color{accent}\rule{\linewidth}{1.2pt}}
-
-\vspace{1.6cm}
-
-{\large\bfseries 课程作业报告}\\[0.3cm]
-{\large 中期阶段稿}\\[1.8cm]
-
-\begin{tabular}{rl}
-\toprule
-课程名称 & 人工智能与数学 \\
-报告类型 & 阶段性报告（中期） \\
-研究领域 & 组合数学 / 极值图论 \\
-撰写日期 & \today \\
-\bottomrule
-\end{tabular}
-
-\vfill
-
-{\small\color{gray}
-本报告随工作推进持续修订。当前版本对应中期汇报阶段：\\[0.15cm]
-第一章与第二章已完成，第三章至第五章为设计草稿，尚无实验数据。}
-
-\vspace{1.2cm}
-\end{titlepage}
-
-% ------------------------- 摘要 -------------------------
-\pagenumbering{Roman}
-\begin{abstract}
-本报告陈述一项课程作业的选题与设计。我们想构建一个智能体，让它自动在\textbf{极值图论}中提出猜想——具体地说，寻找图的几个基本量之间恒成立的不等式，并在它提出的大量候选里判断出哪些值得进一步研究。
-
-选题的出发点是一个观察：自动提出图论猜想的程序从 1980 年代就有了，它们能生成上千条候选，但始终没能成为数学家的常用工具。障碍不在于“想不出”，而在于\textbf{想出的太多、太杂、太可能是偶然成立的}。让机器多提猜想并不难，难的是在候选数量上千时，可靠地挑出少数几条。本课题把这件事当作一个统计问题来处理。
-
-报告分五部分：第一章说明研究的是什么问题、为什么值得做；第二章简要交代已有工作，指出本课题的位置；第三章描述智能体的设计（这部分目前是草稿，代码尚未实现）；第四章说明如何评价做得成不成功；第五章给出进度与计划。
+% ------------------------- 标题 -------------------------
+\begin{center}
+  {\LARGE\bfseries CRP-Agent}\\[0.25cm]
+  {\Large\bfseries 面向极值图论不等式的“猜想—反驳—证明”智能体}\\[0.7cm]
+  {\large 人工智能与数学课程作业报告}\\[0.15cm]
+  {\normalsize 2026 年 11 月}
+\end{center}
 
 \vspace{0.6cm}
-\noindent\textbf{关键词：}极值图论；图不变量；自动猜想；大语言模型智能体；多重检验
-\end{abstract}
-
-\newpage
-\tableofcontents
-\newpage
-
-\pagenumbering{arabic}
-\setcounter{page}{1}
 
 % ------------------------- 正文 -------------------------
 \input{sections/01-problem}
@@ -206,7 +155,6 @@
 \input{sections/05-progress}
 
 % ------------------------- 参考文献 -------------------------
-\newpage
 \input{sections/references}
 
 \end{document}
