@@ -11,6 +11,7 @@ crp_agent/
   validate_dataset.py  用已知结论检验数据集与不变量计算的正确性
   run_baseline.py      阶段二基线：形式搜索 + 系数求解 + 统计筛选（不调用模型）
   ablation.py          消融实验：模型提议与随机提议的对照（需要 API Key）
+  fdr_check.py         筛选的对照实验：安慰剂数据上的假发现计数
   core/
     invariants.py      九个不变量的精确算法（位掩码实现）
     graphgen.py        图的枚举与采样
@@ -60,6 +61,9 @@ python -m crp_agent.ablation --seeds 3 --rounds 4
 
 # 8. 阶段三图表
 python -m crp_agent.viz.stage3_plots
+
+# 9. 筛选的对照实验（安慰剂数据，不调用模型）
+python -m crp_agent.fdr_check --seeds 3
 ```
 
 ## 配置 API Key
