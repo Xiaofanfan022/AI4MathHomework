@@ -17,9 +17,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# 从仓库根目录的 .env 读取
-_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(_ROOT / ".env")
+# 从仓库根目录的 .env 读取（本文件位于 <root>/crp_agent/agent/llm.py）
+_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_ROOT / ".env", override=True)
 
 
 class MissingKeyError(RuntimeError):
@@ -43,14 +43,19 @@ class LLMConfig:
     model: str
     temperature: float = 0.7
     max_retries: int = 3
+    thinking: bool = False
+    timeout: float = 900.0
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
+        raw_think = os.getenv("LLM_THINKING", "0").strip().lower()
         return cls(
             api_key=_require("OPENAI_API_KEY"),
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-            model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+            model=os.getenv("MODEL_NAME", "").strip() or "DeepSeek-V4.1-Flash",
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
+            thinking=raw_think in ("1", "true", "yes", "on"),
+            timeout=float(os.getenv("LLM_TIMEOUT", "900")),
         )
 
 
@@ -62,7 +67,8 @@ class LLMClient:
 
         self.cfg = cfg or LLMConfig.from_env()
         self._client = OpenAI(api_key=self.cfg.api_key,
-                              base_url=self.cfg.base_url)
+                              base_url=self.cfg.base_url,
+                              timeout=self.cfg.timeout)
         self.calls = 0
         self.prompt_tokens = 0
         self.completion_tokens = 0
@@ -84,6 +90,12 @@ class LLMClient:
                 }
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
+                if not self.cfg.thinking:
+                    # 该模型默认会进行长时间内部推理，可能耗尽 token 预算后
+                    # 返回空内容。关闭后响应从分钟级降到秒级。
+                    kwargs["extra_body"] = {
+                        "chat_template_kwargs": {"thinking": False}
+                    }
 
                 resp = self._client.chat.completions.create(**kwargs)
                 self.calls += 1
@@ -102,7 +114,15 @@ class LLMClient:
     def chat_json(self, system: str, user: str, **kw) -> dict:
         """要求模型返回 JSON，并解析。解析失败时抛错，由上层处理。"""
         raw = self.chat(system, user, json_mode=True, **kw)
-        return json.loads(_strip_fence(raw))
+        if not raw.strip():
+            raise RuntimeError("模型返回空内容（可能思考耗尽 token 预算）")
+        try:
+            return json.loads(_strip_fence(raw))
+        except json.JSONDecodeError:
+            obj = _extract_json_object(raw)
+            if obj is None:
+                raise
+            return json.loads(obj)
 
     @property
     def usage(self) -> dict:
@@ -121,3 +141,32 @@ def _strip_fence(s: str) -> str:
         lines = [ln for ln in lines if not ln.strip().startswith("```")]
         s = "\n".join(lines).strip()
     return s
+
+
+def _extract_json_object(s: str) -> str | None:
+    """从夹杂解释文字的输出中截出最外层的 {...}。"""
+    start = s.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return s[start:i + 1]
+    return None

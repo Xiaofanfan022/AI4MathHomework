@@ -82,6 +82,18 @@ class Solution:
     def tight_ratio(self) -> float:
         return self.n_tight / self.n_total if self.n_total else 0.0
 
+    def signed_coefs(self) -> dict[str, float]:
+        """带符号的系数，可直接代入 violation() 计算。
+
+        coefs 里存的是非负幅值，符号在 form.signs 中；
+        构造反例搜索、计算松弛量时必须用带符号版本，
+        否则负号项会被当成正号，导致把成立的图误判为反例。
+        """
+        return {name: sg * a
+                for (name, sg), a in zip(zip(self.form.predictors,
+                                             self.form.signs),
+                                         self.coefs.values())}
+
     def inequality_str(self, digits: int = 3) -> str:
         """人类可读的不等式，目标在左侧。
 

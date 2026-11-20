@@ -94,8 +94,16 @@ SYSTEM_STRATEGY = """\
 
 
 def propose_user_prompt(summary: dict, known: list[str],
-                        tried: list[str], n_round: int) -> str:
-    """构造"提出形式"的用户消息。"""
+                        tried: list[str], n_round: int,
+                        exhausted: list[str] | None = None) -> str:
+    """构造"提出形式"的用户消息。
+
+    known     已经确认成立的结论（不要重复提出）
+    tried     已被反例推翻的形式
+    exhausted 此前各轮已经处理过、无论存活的全部形式。只给 tried
+              会让模型反复提出同一批"未被推翻"的形式，导致后续轮次
+              没有新内容可评估。
+    """
     lines = [
         f"这是第 {n_round} 轮。",
         "",
@@ -118,8 +126,15 @@ def propose_user_prompt(summary: dict, known: list[str],
     lines += [f"  - {s}" for s in known] or ["  （暂无）"]
 
     if tried:
-        lines += ["", "## 已尝试且被推翻的形式（不要重复）"]
+        lines += ["", "## 已尝试且被反例推翻的形式（不要重复）"]
         lines += [f"  - {s}" for s in tried[-12:]]
+
+    if exhausted:
+        lines += ["", "## 此前各轮已经检验过的形式（不要重复，请换方向）"]
+        lines += [f"  - {s}" for s in exhausted[-20:]]
+        lines += ["",
+                  "注意：上面这些形式已经处理过。请提出与它们不同的组合，"
+                  "例如改用尚未用过的预测子，或更换目标不变量。"]
 
     lines += ["", "请提出 4 到 8 条候选形式。"]
     return "\n".join(lines)

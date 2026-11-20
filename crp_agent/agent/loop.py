@@ -51,15 +51,29 @@ def data_summary(df: pd.DataFrame, target: str = "chi") -> dict:
     }
 
 
+def _norm_sign(v) -> int:
+    """把 1/-1、"+"/"-"、"plus"/"minus" 统一成 1/-1。"""
+    if isinstance(v, (int, float)):
+        return 1 if v > 0 else -1
+    s = str(v).strip().lower()
+    if s in ("+", "+1", "1", "plus", "pos", "positive"):
+        return 1
+    if s in ("-", "-1", "minus", "neg", "negative"):
+        return -1
+    raise ValueError(f"无法识别的符号：{v!r}")
+
+
 def parse_forms(raw: dict, target_pool: list[str]) -> list[Form]:
     """把模型的 JSON 输出转成 Form，剔除不合法的。"""
     out: list[Form] = []
     for item in raw.get("forms", []):
         try:
             t = str(item["target"]).strip()
-            d = str(item.get("direction", "le")).strip()
+            d = str(item.get("direction", "le")).strip().lower()
+            d = {"<=": "le", "≤": "le", "=<": "le",
+                 ">=": "ge", "≥": "ge", "=>": "ge"}.get(d, d)
             preds = [str(p).strip() for p in item["predictors"]]
-            signs = [int(s) for s in item["signs"]]
+            signs = [_norm_sign(s) for s in item["signs"]]
 
             if t not in target_pool or d not in ("le", "ge"):
                 continue
@@ -107,14 +121,21 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
               D: pd.DataFrame, V: pd.DataFrame,
               known: list[str], refuted_forms: list[str],
               *, budget: int = 1500, n_perm: int = 200,
-              q: float = 0.1, verbose: bool = True) -> CRPResult:
-    """执行一轮完整循环。"""
+              q: float = 0.1, verbose: bool = True,
+              seen: set[str] | None = None) -> CRPResult:
+    """执行一轮完整循环。
+
+    seen 收集此前各轮已经处理过的不等式文本。不同形式在系数被压到零后
+    可能塌缩成同一条不等式，若不剔除，后续轮次会重复反驳同一条候选。
+    """
     res = CRPResult(rnd)
     pool = ["n", "m", "Delta", "delta", "alpha", "omega", "chi", "nu", "rho"]
+    seen = seen if seen is not None else set()
 
     # ---------------- 1. 提出
     summary = data_summary(D)
-    user = propose_user_prompt(summary, known, refuted_forms, rnd)
+    user = propose_user_prompt(summary, known, refuted_forms, rnd,
+                               exhausted=sorted(seen))
     raw = llm.chat_json(SYSTEM_PROPOSE, user)
 
     res.proposed = parse_forms(raw, pool)
@@ -125,16 +146,24 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
         print(f"  [提出] {len(res.proposed)} 条形式")
 
     # ---------------- 2. 求解
+    n_collapsed = 0
     for f in res.proposed:
         sol = solve_form(D, f)
         if sol is None or sol.trivial:
             continue
+        if sol.inequality_str() in seen:
+            n_collapsed += 1
+            continue
         res.solved.append(sol)
     res.solved = dedup(rank(res.solved))
     trace.write("solve", n_solved=len(res.solved),
+                n_repeat=n_collapsed,
                 candidates=[s.to_dict() for s in res.solved])
     if verbose:
-        print(f"  [求解] {len(res.solved)} 条非平凡不等式")
+        msg = f"  [求解] {len(res.solved)} 条非平凡不等式"
+        if n_collapsed:
+            msg += f"（{n_collapsed} 条与前轮重复，已剔除）"
+        print(msg)
 
     # ---------------- 3. 反驳
     for sol in res.solved:
@@ -149,10 +178,9 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
             b = max(100, min(b, budget))
 
             sr = search_counterexample(
-                {k: v for k, v in zip(sol.form.predictors, sol.coefs.values())},
-                sol.intercept, sol.form.direction, sol.form.target,
-                strategy=strategy, budget=b, n_lo=3, n_hi=12,
-                seed=1000 * rnd + attempt)
+                sol.signed_coefs(), sol.intercept, sol.form.direction,
+                sol.form.target, strategy=strategy, budget=b, n_lo=3,
+                n_hi=12, seed=1000 * rnd + attempt)
 
             hist.append({"strategy": strategy, "budget_used": sr.budget_used,
                          "found": sr.found})
@@ -181,9 +209,11 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
                     "explanation": raw_e,
                 })
                 refuted_forms.append(sol.inequality_str())
+                seen.add(sol.inequality_str())
                 found = True
                 break
 
+        seen.add(sol.inequality_str())
         if not found:
             res.survived.append(sol)
 
@@ -252,12 +282,13 @@ def main(dry_run: bool = False, max_rounds: int = 3,
     refuted: list[str] = []
     all_retained: list[dict] = []
     rounds: list[dict] = []
+    seen: set[str] = set()
 
     for r in range(1, max_rounds + 1):
         print(f"\n--- 第 {r} 轮 ---")
         trace.round = r
         res = run_round(llm, trace, r, D, V, known, refuted,
-                        budget=budget, n_perm=n_perm)
+                        budget=budget, n_perm=n_perm, seen=seen)
         rounds.append(res.to_dict())
         all_retained.extend([c.to_dict() for c in res.retained])
 
