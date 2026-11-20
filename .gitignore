@@ -51,3 +51,6 @@ report/.texmf-var/
 
 # ---- ÓÃ»§µÄ LaTeX Á·Ï°²İ¸å£¨GBK ±àÂë£¬²»Èë¿â£©----
 LatexTest/
+
+# ---- ç¼–è¯‘ä¸­é—´äº§ç‰©ï¼ˆåªä¿ç•™ main.pdfï¼‰----
+report/main_v*.pdf
