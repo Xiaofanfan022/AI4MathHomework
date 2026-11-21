@@ -10,29 +10,71 @@
 
 \subsection{总体结构}
 
-系统的运行是一个闭环，每一轮包含四个阶段，其结构如图\ref{fig:loop} 所示。
+系统的运行是一个闭环。每一轮由八个步骤组成，其中四步交由大语言模型决策，
+四步由确定性程序完成，如图\ref{fig:loop} 所示。这一分工是系统的核心设计：
+凡有确定算法的环节一律不给模型，模型只负责无法预先写死的那几处判断。
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-  node distance=0.55cm,
-  box/.style={draw=accent!55, fill=accentlight, rounded corners=2pt,
-              minimum width=2.55cm, minimum height=0.85cm,
-              align=center, font=\small},
+  x=1cm, y=1cm,
+  mb/.style={draw=orange!75!black, fill=orange!10, rounded corners=2pt,
+             minimum width=2.8cm, minimum height=1.0cm,
+             align=center, font=\scriptsize, inner sep=3pt},
+  pb/.style={draw=accent!60, fill=accentlight, rounded corners=2pt,
+             minimum width=2.8cm, minimum height=1.0cm,
+             align=center, font=\scriptsize, inner sep=3pt},
+  db/.style={draw=gray!55, fill=gray!7, rounded corners=2pt,
+             minimum width=13.45cm, minimum height=0.62cm,
+             align=center, font=\scriptsize, inner sep=3pt},
+  ob/.style={draw=green!45!black!60, fill=green!8, rounded corners=2pt,
+             minimum width=2.8cm, minimum height=0.66cm,
+             align=center, font=\scriptsize, inner sep=3pt},
   arr/.style={-{Stealth[length=2mm]}, draw=accent!70, thick},
-  fb/.style={-{Stealth[length=2mm]}, draw=orange!75!black, thick, dashed}
+  fb/.style={-{Stealth[length=2mm]}, draw=orange!80!black, thick, dashed}
 ]
-\node[box] (a) {提出候选\\{\scriptsize 大模型与线性规划}};
-\node[box, right=of a] (b) {搜索反例\\{\scriptsize 四类策略}};
-\node[box, right=of b] (c) {统计筛选\\{\scriptsize 控制假发现率}};
-\node[box, below=0.95cm of c] (d) {记录与反思\\{\scriptsize 写入轨迹，修正下一轮}};
+% 数据层：全部步骤共用，故画成横贯的带状
+\node[db] (data) at (7.525, 1.78)
+  {数据层\quad 27810 张图 $\times$ 9 个不变量，按阶分层划为
+   $D$（拟合，13905）\quad $V$（验证，6954）\quad $T$（测试，6951）};
 
-\draw[arr] (a) -- (b);
-\draw[arr] (b) -- (c);
-\draw[arr] (c) -- (d);
-\draw[fb] (d.west) -| node[pos=0.25, below, font=\scriptsize, text=orange!70!black] {失败原因反馈} (a.south);
+% 第一行：正向
+\node[mb] (s1) at (2.20, 0)   {\textbf{1 提出候选}\\{\tiny 模型\quad 每轮 4--8 条形式}};
+\node[pb] (s2) at (5.75, 0)   {\textbf{2 线性规划定系数}\\{\tiny 程序\quad 最小化平均松弛}};
+\node[pb] (s3) at (9.30, 0)   {\textbf{3 剔除恒真式}\\{\tiny 程序\quad 32 条基本事实}};
+\node[mb] (s4) at (12.85, 0)  {\textbf{4 选择搜索策略}\\{\tiny 模型\quad 策略与预算}};
+
+% 第二行：折回
+\node[pb] (s5) at (12.85, -2.10) {\textbf{5 搜索反例}\\{\tiny 程序\quad 三类策略}};
+\node[mb] (s6) at (9.30, -2.10)  {\textbf{6 解释失败}\\{\tiny 模型\quad 原因与教训}};
+\node[pb] (s7) at (5.75, -2.10)  {\textbf{7 置换检验与校正}\\{\tiny 程序\quad BH 控制 FDR}};
+\node[mb] (s8) at (2.20, -2.10)  {\textbf{8 判新颖性}\\{\tiny 模型\quad 对照已知定理}};
+
+% 出口
+\node[ob] (out) at (2.20, -3.78) {保留集合 $\rightarrow$ 测试集复核};
+
+\draw[arr] (data.south -| s1) -- (s1.north);
+\draw[arr] (s1) -- (s2);
+\draw[arr] (s2) -- (s3);
+\draw[arr] (s3) -- (s4);
+\draw[arr] (s4) -- (s5);
+\draw[arr] (s5) -- (s6);
+\draw[arr] (s6) -- (s7);
+\draw[arr] (s7) -- (s8);
+\draw[arr] (s8) -- (out);
+
+% 回到第 1 步的反馈
+\draw[fb] (s8.north) -- (s1.south);
+\node[anchor=west, font=\tiny, text=orange!60!black, align=left]
+  at (3.05, -1.05)
+  {下一轮：失败教训、塌缩信息、恒真式、已提形式全部并入提示词};
+
+% 图例
+\node[mb, minimum width=1.75cm, minimum height=0.44cm] at (10.55, -3.78) {\tiny 模型决策};
+\node[pb, minimum width=1.75cm, minimum height=0.44cm] at (12.55, -3.78) {\tiny 程序计算};
 \end{tikzpicture}
-\caption{智能体的单轮运行结构}
+\caption{智能体的工作范式与单轮解题流程。橙色为模型决策，蓝色为程序计算，
+虚线为跨轮反馈。八步中模型只占四处，凡有确定算法的环节一律不交给模型。}
 \label{fig:loop}
 \end{figure}
 
@@ -246,6 +288,59 @@ Mycielski 扩张、Petersen 图与随机正则图。这类图是图论中反例�
 若将这四点全部替换为随机选择，系统仍可运行，只是效果下降。
 因此本系统不宜称为完全自主的智能体，
 其准确定位是以大语言模型为决策核心、以确定性算法为执行手段的混合系统。
-为检验模型的贡献，拟设计消融实验：将提出形式一环替换为随机选择，
-其余环节保持不变，在相同预算下比较两者所产出候选的质量。
-若二者无显著差异，则说明模型在该任务中贡献有限，此结论将如实报告。
+为检验模型的贡献，第\ref{sec:results}节设计了消融实验：将提出形式一环
+替换为随机抽取，其余环节保持不变，在相同预算下比较两者所产出候选的质量。
+
+\subsection{参数设置}
+
+系统全部可调参数列于表\ref{tab:params}。其中多数取值的依据需要说明，
+因为它们直接决定了系统的行为，且部分取值是调试过程中被迫调整的结果。
+
+\begin{table}[H]
+\centering
+\small
+\caption{系统参数设置}
+\label{tab:params}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}
+                              >{\raggedright\arraybackslash}p{4.05cm}
+                              >{\raggedright\arraybackslash}X@{}}
+\toprule
+参数 & 取值 & 说明 \\
+\midrule
+模型 & \texttt{DeepSeek-V4.1-Flash} & 经学校接口调用，OpenAI 兼容格式 \\
+温度 & $0.6$ & 低于默认值，减少同一提示下的输出漂移 \\
+思考模式 & 关闭 & 见下文，开启后单次调用耗时约 200 秒 \\
+单轮提议条数 & $4$--$8$ & 提示词要求，实际多在 7--8 条 \\
+最大轮数 & $5$ & 一次完整运行 \\
+反例搜索预算 & $1500$ 张图/条 & 每条候选最多两轮尝试，单轮下限 100 \\
+置换次数 $B$ & $200$ & 受计算时间限制，见第\ref{sec:evaluation}章的讨论 \\
+显著性水平 $q$ & $0.1$ & BH 过程的错误发现率上限 \\
+最大预测子数 & $2$ & 三个及以上时线性规划易塌缩 \\
+系数上界 & $50$ & 防止系数发散到无意义的量级 \\
+取等容差 $\varepsilon$ & $10^{-6}$（相对） & 判定“取等”的阈值 \\
+数据划分 & $D{:}V{:}T = 2{:}1{:}1$ & 按阶分层，种子 20261120 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{关于思考模式。}该模型默认开启内部推理，首次接入时单次提议调用
+消耗约四万个补全词元、耗时 200 至 280 秒，且只输出四条形式；
+若限制输出长度，则会因推理耗尽预算而返回空内容。
+尝试过的关闭方式包括降低推理强度、设置 \texttt{thinking} 字段，
+均无效；唯一有效的是在请求体中传入 \texttt{chat\_template\_kwargs}
+的 \texttt{thinking} 开关，关闭后单次调用降到一秒以内。
+代价是数学表述的质量下降（例如符号字段返回字符串而非数值），
+因此解析层加了归一化处理。这一取舍在报告中如实记录：
+若追求候选质量应开启思考模式，但五轮闭环将耗时两小时以上，课程周期内不现实。
+
+\textbf{关于置换次数。}$B$ 决定了 $p$ 值能取到的最小值 $1/(B+1)$，
+因而决定了多重检验校正的分辨率。$B = 200$ 时下限为 $0.005$，
+意味着当候选数超过 $(B+1)q = 20$ 条时，校正将失去区分能力。
+这一限制在第\ref{sec:evaluation}章以实验说明，并在第\ref{sec:results}节
+用穷举上界分析给出定量证据。
+
+\textbf{关于最大预测子数。}形式中每增加一个预测子，线性规划的可行域就扩大一维，
+常数项与系数之间存在大量近似等价解，导致求解结果不稳定。
+实测取三个预测子时，约半数形式会有一个系数被压到零而塌缩为二元形式，
+徒增计算量。故限制为二。
+

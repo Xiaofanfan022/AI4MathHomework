@@ -123,6 +123,8 @@ class CRPResult:
         self.survived: list[Solution] = []
         self.tested: list = []
         self.retained: list = []
+        self.collapses: list[dict] = []
+        self.n_key_repeat: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -133,7 +135,9 @@ class CRPResult:
             "n_refuted": len(self.refuted),
             "n_survived": len(self.survived),
             "n_retained": len(self.retained),
+            "n_key_repeat": self.n_key_repeat,
             "trivial": self.trivial,
+            "collapses": self.collapses,
             "refuted": self.refuted,
             "retained": [c.to_dict() for c in self.retained],
         }
@@ -145,25 +149,46 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
               *, budget: int = 1500, n_perm: int = 200,
               q: float = 0.1, verbose: bool = True,
               seen: set[str] | None = None,
-              trivial_seen: list[str] | None = None) -> CRPResult:
+              seen_keys: set[str] | None = None,
+              trivial_seen: list[str] | None = None,
+              lessons: list[dict] | None = None,
+              passed: list[str] | None = None,
+              collapses_seen: list[dict] | None = None) -> CRPResult:
     """执行一轮完整循环。
 
-    seen 收集此前各轮已经处理过的不等式文本。不同形式在系数被压到零后
-    可能塌缩成同一条不等式，若不剔除，后续轮次会重复反驳同一条候选。
+    seen      此前各轮已经处理过的不等式文本。不同形式在系数被压到零后
+              可能塌缩成同一条不等式，若不剔除，后续轮次会重复反驳。
+    seen_keys 此前各轮已经提出过的**形式键**（如 "chi le [+rho]"）。
+              只回传不等式文本是不够的：模型提出的是形式，看到
+              "chi <= 1*rho + 1" 无法对应到自己写过的 predictors/signs，
+              于是会反复提出同一个形式。回传形式键后重复率才下降。
 
     trivial_seen 收集被判为无信息量的恒真式。这类形式统计上必然通过
     检验，若不在提示中排除，模型会反复提出它们并占用筛选名额。
+
+    lessons 收集被推翻的候选、其反例的数值特征与模型归纳的失败原因。
+    早期版本只回传被推翻的形式文本，模型每轮从零开始重新采样，
+    跨轮没有积累，这是消融实验中模型组未能胜过随机抽样的原因之一。
+
+    passed 收集已通过统计检验的候选文本，供下一轮在此基础上收紧。
     """
     res = CRPResult(rnd)
     pool = ["n", "m", "Delta", "delta", "alpha", "omega", "chi", "nu", "rho"]
     seen = seen if seen is not None else set()
+    seen_keys = seen_keys if seen_keys is not None else set()
     trivial_seen = trivial_seen if trivial_seen is not None else []
+    lessons = lessons if lessons is not None else []
+    passed = passed if passed is not None else []
+    collapses_seen = collapses_seen if collapses_seen is not None else []
 
     # ---------------- 1. 提出
     summary = data_summary(D)
     user = propose_user_prompt(summary, known, refuted_forms, rnd,
-                               exhausted=sorted(seen),
-                               trivial=trivial_seen)
+                               exhausted=sorted(seen_keys),
+                               trivial=trivial_seen,
+                               lessons=lessons,
+                               passed=passed,
+                               collapses=collapses_seen)
     raw = llm.chat_json(SYSTEM_PROPOSE, user)
 
     res.proposed = parse_forms(raw, pool)
@@ -175,12 +200,35 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
 
     # ---------------- 2. 求解
     n_collapsed = 0
+    n_key_repeat = 0
+    collapses: list[dict] = []
     for f in res.proposed:
+        # 形式级去重：同一形式即使系数不同也不应重复检验
+        if f.key in seen_keys:
+            n_key_repeat += 1
+        seen_keys.add(f.key)
+
         sol = solve_form(D, f)
         if sol is None or sol.trivial:
             continue
         if sol.inequality_str() in seen:
             n_collapsed += 1
+            # 记录塌缩原因：模型提了 k 个预测子，但 LP 把其中若干压成 0，
+            # 于是结果退化成一条已经检验过的不等式。不把这件事告诉模型，
+            # 它会反复提出"多加一个量"的变体，而这些变体全部塌缩。
+            dead = [name for name, a in zip(sol.form.predictors,
+                                            sol.coefs.values())
+                    if abs(a) < 1e-9]
+            if dead:
+                collapses.append({
+                    "proposed": "+".join(
+                        f"{'+' if sg > 0 else '-'}{p}"
+                        for p, sg in zip(f.predictors, f.signs)),
+                    "target": f.target,
+                    "direction": f.direction,
+                    "zero_coef": dead,
+                    "collapsed_to": sol.inequality_str(),
+                })
             continue
         res.solved.append(sol)
     res.solved = dedup(rank(res.solved))
@@ -201,15 +249,20 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
             seen.add(sol.inequality_str())
     n_trivial = len(res.trivial)
     res.solved = kept
+    res.collapses = collapses
+    res.n_key_repeat = n_key_repeat
 
     trace.write("solve", n_solved=len(res.solved),
-                n_repeat=n_collapsed, n_trivial=n_trivial,
-                trivial=res.trivial,
+                n_repeat=n_collapsed, n_key_repeat=n_key_repeat,
+                n_trivial=n_trivial,
+                trivial=res.trivial, collapses=collapses,
                 candidates=[s.to_dict() for s in res.solved])
     if verbose:
         msg = f"  [求解] {len(res.solved)} 条非平凡不等式"
+        if n_key_repeat:
+            msg += f"（{n_key_repeat} 条形式与已提出过的重复）"
         if n_collapsed:
-            msg += f"（{n_collapsed} 条与前轮重复，已剔除）"
+            msg += f"（{n_collapsed} 条塌缩为已检验过的不等式）"
         if n_trivial:
             msg += f"（{n_trivial} 条恒真式，已剔除）"
         print(msg)
@@ -261,6 +314,17 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
                 })
                 refuted_forms.append(sol.inequality_str())
                 seen.add(sol.inequality_str())
+                # 把模型自己归纳的失败原因带回下一轮。缺少这一步时，
+                # 模型每轮只能看到"哪些形式试过了"，看不到"为什么不行"，
+                # 于是重复提出结构相似的形式。
+                lessons.append({
+                    "inequality": sol.inequality_str(),
+                    "counterexample": {"n": ce["n"], "edges": ce["edges"],
+                                       "invariants": ce["invariants"]},
+                    "reason": str(raw_e.get("reason", ""))[:400],
+                    "lesson": str(raw_e.get("lesson", ""))[:400],
+                    "suggested_fix": str(raw_e.get("suggested_fix", ""))[:400],
+                })
                 found = True
                 break
 
@@ -293,6 +357,7 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
                         dominated_by=info["dominated_by"])
             c.solution.novelty = raw_n          # 附加信息，仅用于展示
             c.solution.informative = info["informative"]
+            passed.append(c.solution.inequality_str())
 
         trace.write("filter", q=q, n_perm=n_perm,
                     n_tested=len(res.tested),
@@ -340,14 +405,22 @@ def main(dry_run: bool = False, max_rounds: int = 3,
     all_retained: list[dict] = []
     rounds: list[dict] = []
     seen: set[str] = set()
+    seen_keys: set[str] = set()
     trivial_seen: list[str] = []
+    lessons: list[dict] = []
+    passed: list[str] = []
+    collapses_seen: list[dict] = []
 
     for r in range(1, max_rounds + 1):
         print(f"\n--- 第 {r} 轮 ---")
         trace.round = r
         res = run_round(llm, trace, r, D, V, known, refuted,
                         budget=budget, n_perm=n_perm, seen=seen,
-                        trivial_seen=trivial_seen)
+                        seen_keys=seen_keys,
+                        trivial_seen=trivial_seen,
+                        lessons=lessons, passed=passed,
+                        collapses_seen=collapses_seen)
+        collapses_seen.extend(res.collapses)
         rounds.append(res.to_dict())
         all_retained.extend([c.to_dict() for c in res.retained])
 
@@ -376,6 +449,8 @@ def main(dry_run: bool = False, max_rounds: int = 3,
         "usage": llm.usage,
         "n_D": len(D), "n_V": len(V), "n_T": len(T),
         "rounds": rounds,
+        "lessons": lessons,
+        "collapses": collapses_seen,
         "retained_all": checked,
         "n_retained": len(checked),
         "n_holds_on_T": n_hold,

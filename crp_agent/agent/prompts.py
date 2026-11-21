@@ -100,7 +100,10 @@ SYSTEM_STRATEGY = """\
 def propose_user_prompt(summary: dict, known: list[str],
                         tried: list[str], n_round: int,
                         exhausted: list[str] | None = None,
-                        trivial: list[str] | None = None) -> str:
+                        trivial: list[str] | None = None,
+                        lessons: list[dict] | None = None,
+                        passed: list[str] | None = None,
+                        collapses: list[dict] | None = None) -> str:
     """构造"提出形式"的用户消息。
 
     known     已经确认成立的结论（不要重复提出）
@@ -111,6 +114,15 @@ def propose_user_prompt(summary: dict, known: list[str],
     trivial   被判为无信息量的形式（由定义直接给出的恒真式）。
               这些形式统计上必然通过检验，但没有内容，须单独列出，
               否则模型会不断提出同一批恒真式。
+    lessons   上一轮被推翻的候选及其失败原因。早期版本只回传被推翻的
+              形式文本，模型看不到自己上一轮归纳出的失败原因，等于每轮
+              从零开始重新采样，跨轮没有积累。这里把反例的数值特征与
+              模型自己的教训一并回传，模型才可能提出有针对性的修正。
+    passed    已通过统计检验的候选。它们尚未被证明，但可以作为进一步
+              收紧或组合的起点。
+    collapses 上一轮"提了多个预测子、但线性规划把其中某些系数压成 0"
+              的形式。这类形式与已检验过的某条不等式重合而被剔除，
+              但模型看不到这一点，于是反复提出"多加一个量"的变体。
     """
     lines = [
         f"这是第 {n_round} 轮。",
@@ -146,6 +158,51 @@ def propose_user_prompt(summary: dict, known: list[str],
         lines += ["", "## 已尝试且被反例推翻的形式（不要重复）"]
         lines += [f"  - {s}" for s in tried[-12:]]
 
+    if lessons:
+        lines += ["", "## 上一轮失败的复盘（重要）"]
+        lines += ["以下候选被反例推翻。反例的数值说明这条形式为什么不可能"
+                  "成立，请据此调整方向，而不是换个符号重提同一条。"]
+        for L in lessons[-6:]:
+            lines.append("")
+            lines.append(f"  * 候选：{L['inequality']}")
+            if L.get("counterexample"):
+                ce = L["counterexample"]
+                inv = ce.get("invariants", {})
+                keys = ("n", "m", "Delta", "alpha", "omega", "chi", "nu")
+                vals = ", ".join(f"{k}={inv[k]}" for k in keys if k in inv)
+                lines.append(f"    反例：{ce['n']} 个顶点，"
+                             f"{len(ce.get('edges', []))} 条边；{vals}")
+            if L.get("reason"):
+                lines.append(f"    失败原因：{L['reason']}")
+            if L.get("lesson"):
+                lines.append(f"    教训：{L['lesson']}")
+            if L.get("suggested_fix"):
+                lines.append(f"    建议方向：{L['suggested_fix']}")
+        lines += ["",
+                  "注意：如果某条候选的失败原因是\"该不变量对目标没有约束力\"，"
+                  "那么只改变符号或系数不会有用，应当更换预测子。"
+                  "如果失败原因是\"常数项吸收了差异\"，应当考虑引入另一个"
+                  "能区分反例与其余图的不变量。"]
+
+    if collapses:
+        lines += ["", "## 上一轮被系数压成零的形式（重要）"]
+        lines += ["你上一轮提出的下列形式，在求解时有一个或几个预测子的系数"
+                  "被压到 0，结果退化成了另一条已经检验过的不等式，因此被"
+                  "剔除。这说明那些量对目标没有额外约束力。请换用别的量，"
+                  "而不是继续在同一组量上加项。"]
+        for c in collapses[-8:]:
+            lines.append(f"  - {c['target']} {c['direction']} "
+                         f"{c['proposed']}：{', '.join(c['zero_coef'])} "
+                         f"的系数为 0，退化为 {c['collapsed_to']}")
+
+    if passed:
+        lines += ["", "## 已通过统计检验的候选（可作为收紧的起点）"]
+        lines += [f"  - {s}" for s in passed[-8:]]
+        lines += ["",
+                  "这些候选尚未被证明，但在验证集上通过了置换检验。"
+                  "你可以尝试对它们收紧：例如加入一个新的预测子，"
+                  "或换一个方向提出对偶形式。"]
+
     if trivial:
         lines += ["", "## 以下形式由定义直接成立，没有信息量（不要再提）"]
         lines += [f"  - {s}" for s in trivial[-12:]]
@@ -154,11 +211,12 @@ def propose_user_prompt(summary: dict, known: list[str],
                   "请提出需要实质论证才能成立的组合。"]
 
     if exhausted:
-        lines += ["", "## 此前各轮已经检验过的形式（不要重复，请换方向）"]
-        lines += [f"  - {s}" for s in exhausted[-20:]]
+        lines += ["", "## 此前各轮已经提出过的形式（不要重复，请换方向）"]
+        lines += [f"  - {s}" for s in exhausted[-24:]]
         lines += ["",
-                  "注意：上面这些形式已经处理过。请提出与它们不同的组合，"
-                  "例如改用尚未用过的预测子，或更换目标不变量。"]
+                  "上面按「目标 方向 [带符号的预测子]」列出，与你在 JSON 里"
+                  "写的 target / direction / predictors / signs 一一对应。"
+                  "这些形式已经处理过，请提出与它们不同的组合。"]
 
     lines += ["", "请提出 4 到 8 条候选形式。"]
     return "\n".join(lines)

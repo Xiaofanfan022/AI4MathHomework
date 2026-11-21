@@ -46,8 +46,9 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import linprog
 
-from .forms import Form, Solution, solve_form
+from .forms import COEF_MAX, Form, Solution, _design_matrix, solve_form
 
 # 判定取等的相对容差
 TIGHT_TOL = 1e-6
@@ -99,23 +100,84 @@ def min_slack(df: pd.DataFrame, sol: Solution) -> float:
 
 
 # ---------------------------------------------------------------- 零分布
+def _lean_solve(A: np.ndarray, t: np.ndarray, direction: str,
+                coef_max: float) -> tuple[np.ndarray, float] | None:
+    """不经过 pandas 的 LP 求解，供置换循环使用。
+
+    与 forms.solve_form 的区别：只做第一步（最小化平均松弛），
+    跳过第二步的常数项收紧。置换循环里我们只需要取等比例，
+    常数项的整齐程度无关紧要，省掉一次 LP 可提速近一倍。
+    """
+    n, k = A.shape
+    if direction == "le":
+        A_ub = np.hstack([-A, -np.ones((n, 1))])
+        b_ub = -t
+        c1 = np.concatenate([A.mean(axis=0), [1.0]])
+    else:
+        A_ub = np.hstack([A, np.ones((n, 1))])
+        b_ub = t
+        c1 = np.concatenate([-A.mean(axis=0), [-1.0]])
+
+    res = linprog(c1, A_ub=A_ub, b_ub=b_ub,
+                  bounds=[(0.0, coef_max)] * k + [(None, None)],
+                  method="highs", options={"presolve": False})
+    if not res.success:
+        return None
+    return res.x[:k], float(res.x[k])
+
+
 def null_tight_ratios(D: pd.DataFrame, V: pd.DataFrame, form: Form,
-                      n_perm: int = 200, seed: int = 0) -> np.ndarray:
-    """置换 D 的目标列后重新拟合，在 V 上计算取等比例。"""
+                      n_perm: int = 200, seed: int = 0,
+                      sol: Solution | None = None) -> tuple[np.ndarray, float]:
+    """置换 D 的目标列后重新拟合，在 V 上计算取等比例。
+
+    返回 (零分布数组, 观测统计量)。
+
+    拟合集必须固定
+    --------------
+    观测值与零分布都必须在同一拟合集上得到。曾尝试缩小拟合集以加速
+    大规模置换，结果同一条形式在 13905 张图上拟出 chi <= 0.8*omega+2.4
+    （取等 3/6954），在 2000 张子样本上拟出 chi <= omega+1（取等
+    398/6954）。后者在完整 D 上其实存在反例（最小松弛 -1.0），只因
+    子样本恰好未含该反例而被判为可行。此时观测统计量测的已不是被
+    报告的候选，p 值随之失真。故拟合集不缩小。
+
+    性能说明
+    --------
+    置换只改变目标列，设计矩阵 A 在所有置换间保持不变，因此把 A 与
+    各不变量预先取出为 numpy 数组，循环内不触碰 pandas，也不复制 D；
+    且零分布只需取等比例，跳过 solve_form 第二步的常数项收紧。
+    两项合计使同样的 B 快约三倍。
+    """
     rng = np.random.default_rng(seed)
-    out = np.full(n_perm, -1.0)
 
+    A = _design_matrix(D, form)
     t_orig = D[form.target].to_numpy(dtype=float)
-    work = D.copy()
 
+    Av = _design_matrix(V, form)
+    tv = V[form.target].to_numpy(dtype=float)
+    scale = max(np.abs(tv).max(), 1.0)
+
+    def _tight(a: np.ndarray, c: float) -> float:
+        pred = Av @ a + c
+        slack = pred - tv if form.direction == "le" else tv - pred
+        return float(np.mean(np.abs(slack) <= TIGHT_TOL * scale))
+
+    if sol is not None:
+        observed = tight_ratio(V, sol)
+    else:
+        r0 = _lean_solve(A, t_orig, form.direction, COEF_MAX)
+        observed = _tight(*r0) if r0 is not None else 0.0
+
+    out = np.full(n_perm, -1.0)
     for b in range(n_perm):
-        work[form.target] = rng.permutation(t_orig)
-        sol = solve_form(work, form)
-        if sol is None or sol.trivial:
+        t_perm = rng.permutation(t_orig)
+        r = _lean_solve(A, t_perm, form.direction, COEF_MAX)
+        if r is None:
             continue
-        out[b] = tight_ratio(V, sol)
+        out[b] = _tight(*r)
 
-    return out
+    return out, observed
 
 
 def permutation_pvalues(D: pd.DataFrame, V: pd.DataFrame,
@@ -126,17 +188,17 @@ def permutation_pvalues(D: pd.DataFrame, V: pd.DataFrame,
 
     同一形式共享零分布，按形式缓存。
     """
-    cache: dict[str, np.ndarray] = {}
+    cache: dict[str, tuple[np.ndarray, float]] = {}
     out: list[TestedCandidate] = []
 
     for i, sol in enumerate(sols, 1):
         key = sol.form.key
         if key not in cache:
             cache[key] = null_tight_ratios(D, V, sol.form,
-                                           n_perm=n_perm, seed=seed)
-        null = cache[key]
+                                           n_perm=n_perm, seed=seed,
+                                           sol=sol)
+        null, tr = cache[key]
 
-        tr = tight_ratio(V, sol)
         p = (1 + int(np.sum(null >= tr))) / (len(null) + 1)
         out.append(TestedCandidate(sol, tr, float(p)))
 

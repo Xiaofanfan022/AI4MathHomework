@@ -136,6 +136,16 @@ def base_facts() -> list[dict]:
         lambda df: c(df, "alpha"))
     add("n >= rho + 1", "n", "ge", lambda df: c(df, "n"),
         lambda df: c(df, "rho") + 1)
+    # 同一不等式的另一种写法，目标与方向都不同。dominated_by 只在
+    # (target, direction) 相同的条件下比较，故这些对称写法必须显式列出，
+    # 否则 "n >= 2*nu" 会被当成有信息量的候选——它其实是 "nu <= n/2" 的
+    # 移项，取等比例高达 0.5854，正是靠这一条才在形式上界中排到第一。
+    add("n >= Delta + 1（最大度）", "n", "ge", lambda df: c(df, "n"),
+        lambda df: c(df, "Delta") + 1)
+    add("n >= 2*nu（匹配数）", "n", "ge", lambda df: c(df, "n"),
+        lambda df: 2 * c(df, "nu"))
+    add("n >= alpha + delta（独立集）", "n", "ge", lambda df: c(df, "n"),
+        lambda df: c(df, "alpha") + c(df, "delta"))
 
     return facts
 
