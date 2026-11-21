@@ -41,6 +41,7 @@ report/sections/*.aux
 report/texmf/
 report/.texmf-var/
 report/main_v*.pdf
+report/t[0-9].pdf
 
 # ---- 临时工作目录 ----
 .tmp_wheels/
