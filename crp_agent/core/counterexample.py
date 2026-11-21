@@ -81,7 +81,14 @@ def _random_graphs(n_lo: int, n_hi: int, count: int, rng: random.Random):
 
 
 def _structured_graphs(n_lo: int, n_hi: int, count: int, rng: random.Random):
-    """结构化族：优先覆盖可能产生反例的极端结构。"""
+    """结构化族：优先覆盖可能产生反例的极端结构。
+
+    注意池子是**有限**的：若 count 大于池子大小，实际评估的图数会少于
+    budget。早期版本只生成约 92 张，导致预算从 200 加到 3000 完全无效
+    （`runs/inject_20261121_144018` 中检出率不随预算变化即由此而来）。
+    现在补入 Kneser 图、无三角形图、正则图的多档度数等，
+    并在池子用尽后用随机正则图补足。
+    """
     pool: list[nx.Graph] = []
 
     for k in range(n_lo, n_hi + 1):
@@ -109,9 +116,19 @@ def _structured_graphs(n_lo: int, n_hi: int, count: int, rng: random.Random):
         if G.number_of_nodes() <= n_hi:
             pool.append(G)
 
-    # 正则图与随机正则图
+    # Kneser 图 K(a, b)：无三角形但色数高，是色数类反例的常见来源
+    for a in range(3, 9):
+        for b in range(1, a // 2 + 1):
+            try:
+                G = nx.kneser_graph(a, b)
+            except Exception:
+                continue
+            if n_lo <= G.number_of_nodes() <= n_hi:
+                pool.append(G)
+
+    # 正则图与随机正则图（度数取多档，早期只到 5 度）
     for k in range(n_lo, n_hi + 1):
-        for d in range(2, min(6, k - 1)):
+        for d in range(2, min(9, k - 1)):
             if (k * d) % 2:
                 continue
             try:
@@ -120,10 +137,37 @@ def _structured_graphs(n_lo: int, n_hi: int, count: int, rng: random.Random):
             except nx.NetworkXError:
                 pass
 
+    # 无三角形图：用随机正则图的三角形删除法构造
+    for k in range(max(n_lo, 5), n_hi + 1):
+        for _ in range(3):
+            try:
+                G = nx.random_regular_graph(3, k, seed=rng.randrange(1 << 30))
+            except nx.NetworkXError:
+                continue
+            for tri in list(nx.enumerate_all_cliques(G)):
+                if len(tri) == 3:
+                    # 前一个三角形的删除可能已移除这条边，需检查
+                    if G.has_edge(tri[0], tri[1]):
+                        G.remove_edge(tri[0], tri[1])
+            pool.append(G)
+
     rng.shuffle(pool)
-    for G in pool[:count]:
+
+    emitted = 0
+    for G in pool:
+        if emitted >= count:
+            return
         G = nx.convert_node_labels_to_integers(G, first_label=0)
+        emitted += 1
         yield G.number_of_nodes(), sorted(tuple(sorted(e)) for e in G.edges())
+
+    # 池子用尽：用随机图补足，保证 budget 真正被用满
+    while emitted < count:
+        n = rng.randint(n_lo, n_hi)
+        p = rng.choice([0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75])
+        G = nx.gnp_random_graph(n, p, seed=rng.randrange(1 << 30))
+        emitted += 1
+        yield n, sorted(tuple(sorted(e)) for e in G.edges())
 
 
 def tight_seed_graphs(df, sol, k: int = 60, tol: float = 1e-6):
@@ -138,7 +182,9 @@ def tight_seed_graphs(df, sol, k: int = 60, tol: float = 1e-6):
     from .forms import _design_matrix
 
     A = _design_matrix(df, sol.form)
-    a = np.array([sol.signed_coefs()[p] for p in sol.form.predictors])
+    # 注意：_design_matrix 的列已按 form.signs 带过符号，
+    # 这里必须用不带符号的系数幅值，否则符号会被应用两次。
+    a = np.array([sol.coefs[p] for p in sol.form.predictors])
     vals = A @ a + sol.intercept - df[sol.form.target].to_numpy(dtype=float)
     if sol.form.direction == "le":
         slack = vals

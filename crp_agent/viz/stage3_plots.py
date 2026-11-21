@@ -1,15 +1,17 @@
-"""阶段三的图：接入模型后的运行结果与消融实验。
+"""阶段三的图：接入模型后的运行结果、消融实验与反例搜索的可靠性。
 
 产出
 ----
 fig11_agent_funnel.png   一次完整运行中候选的逐轮去留
 fig12_ablation.png       模型提议与随机提议的对比
 fig13_trace_timeline.png 运行轨迹中各阶段的实际调用序列
+fig14_injection.png      注入假命题：检出率随预算与反例张数的变化
 
 数据来源
 --------
 fig11、fig13 读取 `runs/` 下最新的 agent 运行；
-fig12 读取 `runs/` 下最新的 ablation 运行。
+fig12 读取 `runs/` 下最新的 ablation 运行；
+fig14 读取 `runs/` 下最新的 inject 运行。
 """
 
 from __future__ import annotations
@@ -168,11 +170,63 @@ def fig13_trace_timeline() -> None:
     save(fig, FIG_DIR / "fig13_trace_timeline.png")
 
 
+def fig14_injection() -> None:
+    """注入假命题：检出率随预算的变化，以及按反例张数的分档。
+
+    左图说明三类策略的检出率几乎不随预算变化。结构化族的确定性
+    候选池只有一百余张图，池子用尽后由随机图补足，而随机图在难例上
+    几乎不可能命中，于是加大预算等于在同一个支撑集上重复采样。
+    右图说明难点在哪里：当整个数据集上只有一张反例图时，
+    三类策略的检出率都接近零。
+    """
+    run = _latest("inject_*/summary.json").parent
+    d = json.loads((run / "summary.json").read_text(encoding="utf-8"))
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.4))
+
+    # 左：检出率 vs 预算
+    ax = axes[0]
+    budgets = d["budgets"]
+    styles = {"random": (ACCENT_LIGHT, "o", "随机"),
+              "structured": (ACCENT, "s", "结构化"),
+              "local": (ORANGE, "^", "局部修改")}
+    for st, (color, marker, label) in styles.items():
+        ys = [d["rate_table"][st][str(b)] if str(b) in d["rate_table"][st]
+              else d["rate_table"][st].get(b) for b in budgets]
+        ax.plot(budgets, ys, marker=marker, color=color, label=label,
+                linewidth=1.6, markersize=4.5)
+    ax.set_xscale("log")
+    ax.set_xlabel("搜索预算（评估的图数）")
+    ax.set_ylabel("检出率")
+    ax.set_ylim(-0.03, 1.03)
+    ax.legend(frameon=False, fontsize=8.5, loc="upper left")
+
+    # 右：检出率 vs 反例张数
+    ax = axes[1]
+    ks = sorted(int(k) for k in d["rate_by_k"])
+    ys = [d["rate_by_k"][str(k)]["rate"] for k in ks]
+    ns = [d["rate_by_k"][str(k)]["n_props"] for k in ks]
+    bars = ax.bar(range(len(ks)), ys, 0.55, color=ACCENT, alpha=0.85)
+    for i, (y, n) in enumerate(zip(ys, ns)):
+        ax.text(i, y + 0.03, f"{y:.2f}", ha="center", va="bottom", fontsize=8.5)
+        ax.text(i, 0.03, f"{n} 条", ha="center", va="bottom", fontsize=7.5,
+                color="white")
+    ax.set_xticks(range(len(ks)))
+    ax.set_xticklabels([f"{k} 张" for k in ks])
+    ax.set_xlabel("整个数据集上的反例张数")
+    ax.set_ylabel("检出率")
+    ax.set_ylim(0, 1.05)
+
+    fig.tight_layout()
+    save(fig, FIG_DIR / "fig14_injection.png")
+
+
 def main() -> None:
     print("生成阶段三的图")
     fig11_agent_funnel()
     fig12_ablation()
     fig13_trace_timeline()
+    fig14_injection()
 
 
 if __name__ == "__main__":

@@ -17,13 +17,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from ..config import DATA_DIR, FIG_DIR, RUNS_DIR
-from ..core.counterexample import search_counterexample
+from ..core.counterexample import search_counterexample, tight_seed_graphs
 from ..core.forms import Form, dedup, enumerate_forms, search, solve_form
 from ..core.split import split
 from ..core.stats import min_slack, tight_ratio
@@ -72,33 +71,60 @@ def fig_refute_curve(out: Path) -> None:
     """三种策略找到反例所需的代价。
 
     横轴是对数尺度的"评估图数"，越靠左越省算力。
-    圆点表示 10 次试验的中位数；若某策略在 2000 张图内从未成功，
+    圆点表示 8 次试验的中位数；若某策略在 2000 张图内从未成功，
     在该行右侧标注"未找到"。
+
+    注意局部修改策略需要"取等图"作为起点。早期版本没传 tight_graphs，
+    该策略每次都返回空列表，于是表里恒为 0/8——那不是策略无效，
+    而是参数没接上（见 `core/counterexample.py` 的 `tight_seed_graphs`）。
     """
+    df = pd.read_csv(DATA_DIR / "dataset_all.csv")
+    sp = split(df, seed=20261120)
+    D, V = sp["D"], sp["V"]
+
     candidates = [
-        (r"$\chi \leq \omega+1$", {"omega": 1.0}, 1.0),
-        (r"$\chi \leq \Delta$", {"Delta": 1.0}, 0.0),
-        (r"$\alpha+\omega \leq n$", {"omega": -1.0, "n": 1.0}, 0.0),
+        ("chi", ("omega",), (1,), 1.0),
+        ("chi", ("Delta",), (1,), 0.0),
+        ("alpha", ("omega", "n"), (-1, 1), 0.0),
     ]
+    titles = [r"$\chi \leq \omega+1$", r"$\chi \leq \Delta$",
+              r"$\alpha+\omega \leq n$"]
     strategies = ["random", "structured", "local"]
     colors = {"random": GRAY, "structured": ACCENT, "local": ORANGE}
     names = {"random": "随机图", "structured": "结构化族", "local": "局部修改"}
     budget = 2000
-    trials = 10
+    trials = 8
 
     fig, ax = plt.subplots(figsize=(8.6, 4.4))
 
+    rows = []
     yticks, ylabels = [], []
-    for i, (title, coefs, b) in enumerate(candidates):
+    for i, ((tgt, preds, signs, b), title) in enumerate(zip(candidates, titles)):
+        f = Form(tgt, preds, signs, "le")
+        sol = solve_form(D, f)
+        if sol is None:
+            continue
+        coefs = {k: sg * sol.coefs[k] for k, sg in zip(preds, signs)}
+        seeds = tight_seed_graphs(V, sol)
+
+        row = {"candidate": f.key, "title": title,
+               "inequality": sol.inequality_str(), "by_strategy": {}}
+
         for j, strat in enumerate(strategies):
             y = i * 4 + j
             used = []
             for t in range(trials):
                 r = search_counterexample(
-                    coefs, b, "le", "chi", strategy=strat,
-                    budget=budget, n_lo=3, n_hi=12, seed=7919 * t + 13)
+                    coefs, b, "le", tgt, strategy=strat,
+                    budget=budget, n_lo=3, n_hi=12, seed=7919 * t + 13,
+                    tight_graphs=seeds)
                 if r.found:
                     used.append(r.budget_used)
+
+            row["by_strategy"][strat] = {
+                "hits": len(used), "trials": trials,
+                "median": float(np.median(used)) if used else None,
+            }
 
             if used:
                 med = float(np.median(used))
@@ -113,6 +139,8 @@ def fig_refute_curve(out: Path) -> None:
             yticks.append(y)
             ylabels.append(names[strat])
 
+        rows.append(row)
+
         # 候选标题放在该组上方
         ax.text(0.015, i * 4 - 0.85, title,
                 transform=ax.get_yaxis_transform(),
@@ -126,6 +154,22 @@ def fig_refute_curve(out: Path) -> None:
     ax.set_xlabel("找到反例时已评估的图数（中位数，对数尺度）")
     ax.grid(axis="x", alpha=0.3)
     save(fig, out)
+
+    # 图与表必须同源：把同一批数字写出来，报告里的表直接照抄
+    table_path = RUNS_DIR / "refute_table.json"
+    table_path.write_text(
+        json.dumps({"budget": budget, "trials": trials, "rows": rows},
+                   ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"  表格数据写入 {table_path}")
+    for row in rows:
+        cells = []
+        for strat in strategies:
+            s = row["by_strategy"][strat]
+            if s["median"] is None:
+                cells.append(f"{s['hits']}/{s['trials']}")
+            else:
+                cells.append(f"{s['hits']}/{s['trials']}({int(s['median'])})")
+        print(f"  {row['title']:<32} " + "  ".join(cells))
 
 
 # ---------------------------------------------------------------- 图 8

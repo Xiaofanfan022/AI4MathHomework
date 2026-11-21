@@ -12,6 +12,8 @@ crp_agent/
   run_baseline.py      阶段二基线：形式搜索 + 系数求解 + 统计筛选（不调用模型）
   ablation.py          消融实验：模型提议与随机提议的对照（需要 API Key）
   fdr_check.py         筛选的对照实验：安慰剂数据上的假发现计数
+  ceiling.py           穷举上界：完整形式空间逐条求解，给出同口径下的上限
+  injection.py         注入难例：在已知为假的命题上测量反例搜索的检出率
   core/
     invariants.py      九个不变量的精确算法（位掩码实现）
     graphgen.py        图的枚举与采样
@@ -64,6 +66,12 @@ python -m crp_agent.viz.stage3_plots
 
 # 9. 筛选的对照实验（安慰剂数据，不调用模型）
 python -m crp_agent.fdr_check --seeds 3
+
+# 10. 穷举上界（约 3 分钟，不调用模型）
+python -m crp_agent.ceiling --max-pred 2 --n-perm 200
+
+# 11. 注入难例：反例搜索的检出率（约 5 分钟，不调用模型）
+python -m crp_agent.injection
 ```
 
 ## 配置 API Key
@@ -99,8 +107,12 @@ MODEL_NAME=...            # 例如 coding-glm-5.1-free
 （例如 $\omega \leq \chi$、$\delta \leq \Delta$）。这类形式在任何图上都成立，
 必然通过置换检验，却没有信息量。若不加区分，随机抽样反而会"胜出"——
 消融实验中随机组一度全面超过模型组，原因正是如此。
-`core/informativeness.py` 用 32 条基本事实识别被支配的候选，
+`core/informativeness.py` 用 35 条基本事实识别被支配的候选，
 智能体把它们连同理由一起反馈给模型，要求换方向。
+
+注意**同一不等式的对称写法**：$n \geq 2\nu$ 与 $\nu \leq n/2$ 是移项关系，
+若只比较目标与方向都相同的写法，后者在表中、前者却会被误判为有信息量。
+这一漏洞曾使上界多出 3 条（37 而非 34），补上后 $n \geq 2\nu$ 被正确剔除。
 
 ## 已知结论
 
