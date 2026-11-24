@@ -17,10 +17,11 @@ from typing import Any
 class Trace:
     """一次运行的轨迹，落盘为一个 JSONL 文件。"""
 
-    def __init__(self, run_dir: Path, round_id: int = 0):
+    def __init__(self, run_dir: Path, round_id: int = 0,
+                 name: str = "trace.jsonl"):
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        self.path = self.run_dir / "trace.jsonl"
+        self.path = self.run_dir / name
         self.round = round_id
         self._seq = 0
 

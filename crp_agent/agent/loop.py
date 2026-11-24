@@ -82,8 +82,20 @@ def _norm_sign(v) -> int:
     raise ValueError(f"无法识别的符号：{v!r}")
 
 
-def parse_forms(raw: dict, target_pool: list[str]) -> list[Form]:
-    """把模型的 JSON 输出转成 Form，剔除不合法的。"""
+def parse_forms(raw: dict, target_pool: list[str],
+                pred_pool: list[str] | None = None,
+                max_pred: int = 3) -> list[Form]:
+    """把模型的 JSON 输出转成 Form，剔除不合法的。
+
+    target_pool 与 pred_pool 分开：目标只允许基础不变量，预测子可以
+    包含派生特征（乘积项）。目标若是乘积，猜想会失去可读性，也会让
+    "新颖性判定"无从下手。
+
+    max_pred 必须与 `form_space_size` 用的上界一致，否则模型会提出
+    超出当前档位的三点形式，而"是否提完"的判断仍按两点空间算，
+    两边对不上。
+    """
+    pool = target_pool if pred_pool is None else pred_pool
     out: list[Form] = []
     for item in raw.get("forms", []):
         try:
@@ -96,9 +108,9 @@ def parse_forms(raw: dict, target_pool: list[str]) -> list[Form]:
 
             if t not in target_pool or d not in ("le", "ge"):
                 continue
-            if len(preds) != len(signs) or not 1 <= len(preds) <= 3:
+            if len(preds) != len(signs) or not 1 <= len(preds) <= max_pred:
                 continue
-            if t in preds or any(p not in target_pool for p in preds):
+            if t in preds or any(p not in pool for p in preds):
                 continue
             if len(set(preds)) != len(preds):
                 continue
@@ -125,6 +137,9 @@ class CRPResult:
         self.retained: list = []
         self.collapses: list[dict] = []
         self.n_key_repeat: int = 0
+        # 本轮反例搜索实际评估的图数。长期运行时用它计每日图数配额，
+        # 逐轮累加即可，不必每轮回读整个轨迹文件（那样是 O(n^2)）。
+        self.graphs_used: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -153,7 +168,10 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
               trivial_seen: list[str] | None = None,
               lessons: list[dict] | None = None,
               passed: list[str] | None = None,
-              collapses_seen: list[dict] | None = None) -> CRPResult:
+              collapses_seen: list[dict] | None = None,
+              pred_pool: list[str] | None = None,
+              max_forms: int = 8,
+              max_pred: int = 3) -> CRPResult:
     """执行一轮完整循环。
 
     seen      此前各轮已经处理过的不等式文本。不同形式在系数被压到零后
@@ -174,6 +192,7 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
     """
     res = CRPResult(rnd)
     pool = ["n", "m", "Delta", "delta", "alpha", "omega", "chi", "nu", "rho"]
+    preds_ok = pred_pool if pred_pool is not None else pool
     seen = seen if seen is not None else set()
     seen_keys = seen_keys if seen_keys is not None else set()
     trivial_seen = trivial_seen if trivial_seen is not None else []
@@ -188,10 +207,14 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
                                trivial=trivial_seen,
                                lessons=lessons,
                                passed=passed,
-                               collapses=collapses_seen)
+                               collapses=collapses_seen,
+                               max_forms=max_forms,
+                               derived=[p for p in preds_ok if p not in pool]
+                               or None,
+                               max_pred=max_pred)
     raw = llm.chat_json(SYSTEM_PROPOSE, user)
 
-    res.proposed = parse_forms(raw, pool)
+    res.proposed = parse_forms(raw, pool, preds_ok, max_pred)
     trace.write("propose", llm_input=user[-1200:], llm_output=raw,
                 n_forms=len(res.proposed),
                 forms=[f.key for f in res.proposed])
@@ -287,6 +310,7 @@ def run_round(llm: LLMClient, trace: Trace, rnd: int,
 
             hist.append({"strategy": strategy, "budget_used": sr.budget_used,
                          "found": sr.found})
+            res.graphs_used += sr.budget_used
             trace.write("refute", inequality=sol.inequality_str(),
                         strategy=strategy, budget=b,
                         budget_used=sr.budget_used, found=sr.found,

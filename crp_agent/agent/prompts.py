@@ -24,6 +24,21 @@ nu    匹配数（两两不共端点的边的最大条数）
 rho   谱半径（邻接矩阵最大特征值的绝对值）
 """
 
+# 派生特征只在长跑的后半段开放。它们让形式空间从 2304 条扩到 7056 条，
+# 但可读性下降：像 "chi <= 0.3*aD" 这样的不等式很难一眼看出含义。
+# 因此策略是先让模型在基础空间里提完，再放开乘积项。
+DERIVED_GLOSSARY = """\
+以下派生特征由基础不变量相乘得到，可以当作预测子使用：
+n2     n 的平方（顶点数 × 顶点数）
+aD     alpha × Delta（独立数 × 最大度）
+wD     omega × Delta（团数 × 最大度）
+cD     chi × Delta（色数 × 最大度）
+aO     alpha × omega（独立数 × 团数）
+nD     n × Delta（顶点数 × 最大度）
+
+注意：目标不变量仍然只能是上面九个基础量，派生特征只能出现在右侧。
+"""
+
 SYSTEM_PROPOSE = """\
 你是一位图论研究者，正在参与一个自动猜想系统。
 
@@ -33,7 +48,8 @@ SYSTEM_PROPOSE = """\
 - 每条形式必须写成 "目标 <= 线性组合" 或 "目标 >= 线性组合"。
 - 线性组合只能使用给出的不变量，每个量带 +1 或 -1 的符号。
 - 系数不由你给出，系统会用线性规划求解，你只决定"用哪些量、什么方向"。
-- 最多使用 3 个预测子。超过 3 个的形式在有限数据上几乎必然过拟合。
+- 预测子个数有上限，具体数目见用户消息末尾。预测子越多，在有限数据上
+  越容易过拟合，也越容易被线性规划压成零。
 - 目标不变量可以是九个量中的任意一个，不要全部集中在 chi 上。
   在八条形式里，至少三条的目标不应是 chi。
 - 不要提出平凡形式：例如只用 n 作预测子去界 n 本身，或只用一个量界它自己，
@@ -103,7 +119,10 @@ def propose_user_prompt(summary: dict, known: list[str],
                         trivial: list[str] | None = None,
                         lessons: list[dict] | None = None,
                         passed: list[str] | None = None,
-                        collapses: list[dict] | None = None) -> str:
+                        collapses: list[dict] | None = None,
+                        max_forms: int = 8,
+                        derived: list[str] | None = None,
+                        max_pred: int = 3) -> str:
     """构造"提出形式"的用户消息。
 
     known     已经确认成立的结论（不要重复提出）
@@ -129,6 +148,10 @@ def propose_user_prompt(summary: dict, known: list[str],
         "",
         "## 不变量对照表",
         INVARIANT_GLOSSARY,
+    ]
+    if derived:
+        lines += [DERIVED_GLOSSARY]
+    lines += [
         "## 数据摘要",
         f"图的数量：{summary['n_graphs']}",
         f"阶数范围：{summary['n_range']}",
@@ -218,7 +241,8 @@ def propose_user_prompt(summary: dict, known: list[str],
                   "写的 target / direction / predictors / signs 一一对应。"
                   "这些形式已经处理过，请提出与它们不同的组合。"]
 
-    lines += ["", "请提出 4 到 8 条候选形式。"]
+    lines += ["", f"请提出 {max(1, max_forms - 2)} 到 {max_forms} 条候选形式。"
+                  f"每条最多 {max_pred} 个预测子。"]
     return "\n".join(lines)
 
 

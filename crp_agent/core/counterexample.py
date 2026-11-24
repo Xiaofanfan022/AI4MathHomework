@@ -23,6 +23,7 @@ import networkx as nx
 import numpy as np
 
 from ..config import INVARIANTS
+from .features import augment_inv
 from .invariants import compute_all
 
 
@@ -67,6 +68,9 @@ def violation(coefs: dict, intercept: float, direction: str,
 def _check(n: int, edges, coefs: dict, intercept: float, direction: str,
            target: str) -> float:
     inv = compute_all(n, edges)
+    # 候选可能以派生特征（乘积项）为预测子，compute_all 不认识这些名字，
+    # 代入前必须补齐，否则 sum() 里会因缺键而抛 KeyError。
+    augment_inv(inv)
     inv["_target"] = inv[target]
     return violation(coefs, intercept, direction, inv)
 

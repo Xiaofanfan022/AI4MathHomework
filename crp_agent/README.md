@@ -14,16 +14,20 @@ crp_agent/
   fdr_check.py         筛选的对照实验：安慰剂数据上的假发现计数
   ceiling.py           穷举上界：完整形式空间逐条求解，给出同口径下的上限
   injection.py         注入难例：在已知为假的命题上测量反例搜索的检出率
+  longrun.py           长期运行：断点续跑、记账本、出日报、形式空间自动扩张
+  analyze_longrun.py   长跑结果分析：读账本生成报告，并在完整数据上复验候选
   core/
     invariants.py      九个不变量的精确算法（位掩码实现）
     graphgen.py        图的枚举与采样
     forms.py           候选形式与线性规划求解
+    features.py        乘积型派生特征（n2 / aD / wD / cD / aO / nD）
     counterexample.py  反例搜索（随机 / 结构化 / 局部修改）
     stats.py           置换检验与 BH 多重检验校正
     split.py           发现集 / 验证集 / 测试集的划分
     informativeness.py 恒真式识别：候选是否被定义或已知界直接支配
   agent/
     llm.py             模型客户端（兼容 OpenAI 接口）
+    mock.py            假模型：只用于验证工程件，不能评价智能体质量
     prompts.py         四处调用的提示词
     trace.py           JSONL 轨迹记录
     loop.py            智能体主循环
@@ -74,6 +78,57 @@ python -m crp_agent.ceiling --max-pred 2 --n-perm 200
 python -m crp_agent.injection
 ```
 
+## 长期运行
+
+短跑几轮之后，形式空间会成为瓶颈：基础档只有 2304 条（9 个基础量、
+至多 2 个预测子），智能体五轮就能提掉二十多个互异形式。长跑模式在
+时间维度上展开，并在形式空间接近枯竭时自动升级档位。
+
+```powershell
+# 跑 24 小时（断点续跑：中途杀掉后用同一条命令重启即可）
+python -m crp_agent.longrun --hours 24 --run-dir crp_agent/runs/longrun_week
+
+# 只跑 10 轮，用于估计单轮耗时
+python -m crp_agent.longrun --hours 1 --max-rounds 10
+
+# 不调用模型的冒烟测试
+python -m crp_agent.longrun --mock --max-rounds 5
+```
+
+运行目录里的四个文件：
+
+| 文件 | 内容 |
+|---|---|
+| `state.json` | 断点：轮次、已提形式键、累计词元、档位、失败计数 |
+| `ledger.jsonl` | 追加式账本：每轮一行，另有 retained / refuted / escalate / error 记录 |
+| `trace.jsonl` | 逐步轨迹，供汇报时引用"智能体做了什么决定" |
+| `daily/YYYY-MM-DD.md` | 每日自动生成的日报 |
+
+**自动扩张。** 两个判据任一满足即升档：已提形式占形式空间的比例超过
+35%，或最近 6 轮平均每轮新增互异形式少于 2 个。档位与形式空间：
+
+| 档位 | 预测子 | 特征数 | 形式空间（max_pred=2） | max_pred=3 |
+|---|---|---|---|---|
+| 0 基础 | 9 个基础量 | 9 | 2304 | 10368 |
+| 1 乘积项 | 加 6 个乘积 | 15 | 7056 | 59472 |
+| 2 三点预测子 | 同档 1 | 15 | — | 59472 |
+
+乘积项只取整数乘积（如 `n·n`、`α·Δ`），不取比值——比值是小数，
+取等比例会塌到零，置换检验随即失去分辨力。
+
+**单轮耗时**（实测，`--budget 1000 --n-perm 200`）：约 66 秒，21 次调用、
+约 1 万词元。跑满一周约 9000 轮，接近第 2 档 59472 条的容量。
+
+**跑完之后：**
+
+```powershell
+python -m crp_agent.analyze_longrun --run-dir crp_agent/runs/longrun_week
+```
+
+生成的 `analysis.md` 含六节：总体统计、异常、逐轮走势与转化率、被保留
+候选（**在完整 27810 张图上重新复验**，不依赖当时的划分）、被推翻候选
+的反例阶数分布、以及把数字翻成结论的判读。脚本只读，可反复运行。
+
 ## 配置 API Key
 
 复制 `.env.example` 为 `.env`，填入：
@@ -85,7 +140,7 @@ MODEL_NAME=...            # 例如 coding-glm-5.1-free
 ```
 
 `.env` 已被 `.gitignore` 排除，不会进入版本库。
-只有第 6 步需要 Key，前五步完全离线。
+第 6、7、12 步需要 Key，其余步骤完全离线。
 
 ## 设计要点
 
