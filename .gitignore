@@ -55,8 +55,18 @@ report/t[0-9].pdf
 # ---- 渲染预览（office 技能生成的临时目录）----
 .dsh-office-*/
 
+# ---- ppt-master 依赖与工作产物 ----
+.deps/
+projects/
+.pptx-build-*/
+.tmp_piptmp/
+
 # ---- Office 打开文件时生成的锁文件 ----
 ~$*
 
 # ---- 用户的 LaTeX 练习草稿（GBK 编码，不入库）----
 LatexTest/
+
+# ---- ppt-master ���βֿ��� skill Ŀ¼���ӣ�������װ������⣩----
+ppt-master/
+.dsh/
